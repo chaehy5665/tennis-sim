@@ -1,0 +1,8 @@
+﻿<Solution>
+  <Project Path="TennisSim.Viewer.EditMode.csproj" />
+  <Project Path="TennisSim.Viewer.Checks.csproj" />
+  <Project Path="TennisSim.Viewer.Data.csproj" />
+  <Project Path="TennisSim.Viewer.Editor.csproj" />
+  <Project Path="TennisSim.Viewer.csproj" />
+  <Project Path="TennisSim.Viewer.PlayMode.csproj" />
+</Solution>

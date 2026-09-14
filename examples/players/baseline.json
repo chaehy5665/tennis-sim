@@ -1,0 +1,1 @@
+{"id":"A","name":"Ember","servePower":0.75,"serveControl":0.78,"forehandPower":0.8,"forehandControl":0.8,"backhandPower":0.65,"backhandControl":0.72,"maxSpeed":6.2,"acceleration":10,"reactionSeconds":0.20,"preparationSeconds":0.18,"stamina":0.8,"leftHanded":false}

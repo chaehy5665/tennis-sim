@@ -1,0 +1,1 @@
+{"id":"A","name":"Granite","servePower":0.96,"serveControl":0.77,"forehandPower":0.8,"forehandControl":0.8,"backhandPower":0.48,"backhandControl":0.60,"maxSpeed":5.3,"acceleration":8,"reactionSeconds":0.20,"preparationSeconds":0.18,"stamina":0.65,"leftHanded":false}

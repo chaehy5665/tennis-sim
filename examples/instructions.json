@@ -1,0 +1,4 @@
+[
+  {"player":0,"requestedTick":240,"value":{"target":"TargetBackhand","aggression":"Balanced","serve":"T"}},
+  {"player":1,"requestedTick":1200,"value":{"target":"Balanced","aggression":"Safe","serve":"Body"}}
+]

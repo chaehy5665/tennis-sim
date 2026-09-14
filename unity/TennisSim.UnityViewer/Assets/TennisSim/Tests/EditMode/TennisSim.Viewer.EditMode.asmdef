@@ -1,0 +1,15 @@
+{
+  "name": "TennisSim.Viewer.EditMode",
+  "references": [
+    "TennisSim.Viewer",
+    "TennisSim.Viewer.Data",
+    "TennisSim.Viewer.Editor",
+    "TennisSim.Viewer.Checks"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

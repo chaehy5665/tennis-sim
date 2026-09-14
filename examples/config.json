@@ -1,0 +1,1 @@
+{"tickSeconds":0.008333333333333333,"gravity":9.81,"drag":0.08,"restitution":0.74,"groundFriction":0.88,"reach":0.95,"minContactHeight":0.45,"maxContactHeight":1.9,"snapshotEveryTicks":12,"maxPointTicks":24000,"maxPoints":1000,"maxServeAttempts":100,"firstServer":0,"initialEndA":-1}

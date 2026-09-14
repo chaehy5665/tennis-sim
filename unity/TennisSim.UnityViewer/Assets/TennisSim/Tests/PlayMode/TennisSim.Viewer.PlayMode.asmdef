@@ -1,0 +1,10 @@
+{
+  "name": "TennisSim.Viewer.PlayMode",
+  "references": [
+    "TennisSim.Viewer",
+    "TennisSim.Viewer.Data"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

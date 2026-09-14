@@ -1,0 +1,16 @@
+.tools/
+**/bin/
+**/obj/
+artifacts/
+
+# Unity generated files, scoped to this project only.
+unity/TennisSim.UnityViewer/Library/
+unity/TennisSim.UnityViewer/Temp/
+unity/TennisSim.UnityViewer/Logs/
+unity/TennisSim.UnityViewer/UserSettings/
+unity/TennisSim.UnityViewer/Build/
+unity/TennisSim.UnityViewer/Builds/
+unity/TennisSim.UnityViewer/MemoryCaptures/
+unity/TennisSim.UnityViewer/.vs/
+unity/TennisSim.UnityViewer/*.csproj
+unity/TennisSim.UnityViewer/*.sln

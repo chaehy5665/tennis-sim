@@ -1,0 +1,6 @@
+{
+  "name": "TennisSim.Viewer",
+  "references": [
+    "TennisSim.Viewer.Data"
+  ]
+}

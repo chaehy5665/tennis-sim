@@ -1,0 +1,9 @@
+{
+  "name": "TennisSim.Viewer.Editor",
+  "references": [
+    "TennisSim.Viewer"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

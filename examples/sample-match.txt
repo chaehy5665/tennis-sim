@@ -1,0 +1,29 @@
+Point   1 t=  18.110s winner=B reason=UnreturnedBall  score=0-0 0-15
+Point   2 t=  37.077s winner=B reason=UnreturnedBall  score=0-0 0-30
+Point   3 t=  67.009s winner=B reason=UnreturnedBall  score=0-0 0-40
+Point   4 t=  90.057s winner=B reason=UnreturnedBall  score=0-1 0-0
+Point   5 t=  99.538s winner=B reason=Out             score=0-1 0-15
+Point   6 t= 193.157s winner=A reason=UnreturnedBall  score=0-1 15-15
+Point   7 t= 199.666s winner=B reason=UnreturnedBall  score=0-1 15-30
+Point   8 t= 210.718s winner=B reason=UnreturnedBall  score=0-1 15-40
+Point   9 t= 247.037s winner=A reason=UnreturnedBall  score=0-1 30-40
+Point  10 t= 266.961s winner=B reason=UnreturnedBall  score=0-2 0-0
+Point  11 t= 274.489s winner=B reason=UnreturnedBall  score=0-2 0-15
+Point  12 t= 290.653s winner=B reason=UnreturnedBall  score=0-2 0-30
+Point  13 t= 308.860s winner=B reason=UnreturnedBall  score=0-2 0-40
+Point  14 t= 316.399s winner=B reason=UnreturnedBall  score=0-3 0-0
+Point  15 t= 325.905s winner=A reason=UnreturnedBall  score=0-3 15-0
+Point  16 t= 350.220s winner=B reason=UnreturnedBall  score=0-3 15-15
+Point  17 t= 356.602s winner=B reason=UnreturnedBall  score=0-3 15-30
+Point  18 t= 398.505s winner=B reason=UnreturnedBall  score=0-3 15-40
+Point  19 t= 405.004s winner=B reason=UnreturnedBall  score=0-4 0-0
+Point  20 t= 467.950s winner=B reason=Out             score=0-4 0-15
+Point  21 t= 493.071s winner=B reason=UnreturnedBall  score=0-4 0-30
+Point  22 t= 503.297s winner=B reason=Out             score=0-4 0-40
+Point  23 t= 527.986s winner=B reason=UnreturnedBall  score=0-5 0-0
+Point  24 t= 563.005s winner=B reason=UnreturnedBall  score=0-5 0-15
+Point  25 t= 596.168s winner=B reason=Out             score=0-5 0-30
+Point  26 t= 600.424s winner=B reason=UnreturnedBall  score=0-5 0-40
+Point  27 t= 611.617s winner=B reason=Net             score=0-6 0-0 Complete
+STATUS=Completed SCORE=0-6 0-0 Complete POINTS=27 EVENTS=2309 REALISM_CALIBRATED=false
+REPLAY_FILE=/home/c10/projects/tennis/artifacts/sample-42.json

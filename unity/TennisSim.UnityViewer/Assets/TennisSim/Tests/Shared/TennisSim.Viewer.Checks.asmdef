@@ -1,0 +1,10 @@
+{
+  "name": "TennisSim.Viewer.Checks",
+  "references": [
+    "TennisSim.Viewer.Data"
+  ],
+  "noEngineReferences": true,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

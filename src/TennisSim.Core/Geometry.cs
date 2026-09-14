@@ -24,12 +24,20 @@ namespace TennisSim.Core
         public const double HalfLength = 11.885, HalfWidth = 4.115, ServiceLine = 6.4;
         public const double BallRadius = 0.0335;
         public static double NetHeight(double x) => 0.914 + 0.156 * Math.Min(1, Math.Abs(x) / 5.029);
-        // Ball footprint touching the outside edge is in. Dimensions denote outside line edges.
+        // Circular footprint touching the rectangle's outside line edges is in.
+        // Separate axis expansion falsely admits centres diagonally beyond a corner.
+        private static bool FootprintIn(double x, double z, double minX, double maxX, double maxZ)
+        {
+            double dx = Math.Max(0, Math.Max(minX - x, x - maxX));
+            double dz = Math.Max(0, Math.Max(-z, z - maxZ));
+            // <4 ulps of court-scale subtraction (~16m); preserves exact edge tangency.
+            double radius = BallRadius + 1e-14;
+            return dx * dx + dz * dz <= radius * radius;
+        }
         public static bool SinglesIn(Vec3 p, int receivingEnd) =>
-            Math.Abs(p.X) <= HalfWidth + BallRadius && p.Z * receivingEnd >= -BallRadius && p.Z * receivingEnd <= HalfLength + BallRadius;
+            FootprintIn(p.X, p.Z * receivingEnd, -HalfWidth, HalfWidth, HalfLength);
         public static bool ServiceIn(Vec3 p, int serverEnd, bool deuce) =>
-            p.Z * -serverEnd >= -BallRadius && p.Z * -serverEnd <= ServiceLine + BallRadius &&
-            Math.Abs(p.X) <= HalfWidth + BallRadius && p.X * (deuce ? serverEnd : -serverEnd) >= -BallRadius;
+            FootprintIn(p.X * (deuce ? serverEnd : -serverEnd), p.Z * -serverEnd, 0, HalfWidth, ServiceLine);
         // A player facing the net has world-right = +X at the negative end, -X at the positive end.
         public static double RightX(int end) => -end;
         public static bool IsForehand(Vec3 body, Vec3 ball, int end, bool leftHanded) =>

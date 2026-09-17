@@ -1,4 +1,5 @@
 using System;
+using TennisSim.Core.Bounce;
 
 namespace TennisSim.Core
 {
@@ -70,13 +71,13 @@ namespace TennisSim.Core
             sinceOpponentHit + 1e-9 >= p.ReactionSeconds + p.PreparationSeconds && ball.Bounces == 1 &&
             ball.Position.Y >= c.MinContactHeight && ball.Position.Y <= c.MaxContactHeight &&
             ball.Position.Z * s.End > 0 && ball.Velocity.Z * s.End > 0 && Vec3.GroundDistance(s.Position, ball.Position) <= c.Reach;
-        public static Vec3 PredictContact(PlayerProfile p, PlayerState s, BallState observed, SimConfig c, double timeSinceHit, out double arrival, out bool reachable)
+        public static Vec3 PredictContact(PlayerProfile p, PlayerState s, BallState observed, SimConfig c, double timeSinceHit, out double arrival, out bool reachable, SurfaceEnvironment? surface = null)
         {
             var b = observed.Copy(); Vec3 fallback = s.Position; arrival = 0; reachable = false;
             const double step = 1.0 / 60;
             for (double t = step; t < 4; t += step)
             {
-                b = BallPhysics.Advance(b, step, c);
+                b = BallPhysics.Advance(b, step, c, null, surface);
                 if (b.Bounces >= 2) break;
                 if (b.Bounces != 1 || b.Position.Z * s.End <= 0 || b.Position.Y < c.MinContactHeight || b.Position.Y > c.MaxContactHeight) continue;
                 fallback = new Vec3(b.Position.X, 0, b.Position.Z); arrival = t;

@@ -93,6 +93,7 @@ public static class AuditScenarios
         for (int i = 0; i < 100; i++) { Movement.Step(profile, x, new Vec3(-3, 0, -12), c.TickSeconds); Movement.Step(profile, mirror, new Vec3(3, 0, 12), c.TickSeconds); }
         Add("movement.endMirror", (x.Position + mirror.Position).Length < 1e-12, (x.Position + mirror.Position).Length, "<1e-12", "m", "Deterministic inputs reflected across origin, no random label symmetry claim");
         foreach (int server in new[] { 0, 1 }) { var score = new Scoring(server); for (int i = 0; i < 4; i++) score.Award(0); Add("server.alternate" + server, score.Server == 1 - server, score.Server, (1 - server).ToString(), "index", "One completed game switches server, independent of winner"); }
+        results.AddRange(BounceScenarios.Run());
         return results;
     }
 }

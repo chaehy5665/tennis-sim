@@ -15,6 +15,19 @@ public static class ReplayJson
         {
             if (info.Type == typeof(Vec3))
                 foreach (var property in info.Properties.Where(p => p.Set == null).ToArray()) info.Properties.Remove(property);
+            // New optional fields are omitted when unused so a legacy-path replay keeps its previous
+            // bytes. None of these three can be null-valued in a legacy record.
+            if (info.Type == typeof(BallState))
+            {
+                var spin = info.Properties.FirstOrDefault(p => string.Equals(p.Name, "AngularVelocity", StringComparison.OrdinalIgnoreCase));
+                if (spin != null) spin.ShouldSerialize = (_, value) => value is Vec3 v && (v.X != 0 || v.Y != 0 || v.Z != 0);
+            }
+            if (info.Type == typeof(MatchEvent) || info.Type == typeof(MatchInput))
+            {
+                string name = info.Type == typeof(MatchEvent) ? "Bounce" : "Surface";
+                var optional = info.Properties.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (optional != null) optional.ShouldSerialize = (_, value) => value != null;
+            }
         });
         return new JsonSerializerOptions
         {

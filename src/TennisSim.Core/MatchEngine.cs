@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TennisSim.Core.Bounce;
 
 namespace TennisSim.Core
 {
@@ -7,6 +8,7 @@ namespace TennisSim.Core
     {
         private readonly MatchInput input;
         private readonly SimConfig config;
+        private readonly SurfaceEnvironment? surface;
         private readonly SeedRandom rng;
         private readonly Scoring score;
         private readonly PlayerState[] players = new PlayerState[2];
@@ -36,7 +38,9 @@ namespace TennisSim.Core
             foreach (var t in supplied.Tactics) { if (t == null) throw new ArgumentException("Missing tactic"); t.Validate(); }
             if (supplied.Players[0].Id == supplied.Players[1].Id) throw new ArgumentException("Player IDs must be distinct");
             if (stopAfterPoints < 0) throw new ArgumentException("Negative point count");
-            input = new MatchInput { Seed = supplied.Seed, Config = supplied.Config.Copy(), Players = new[] { supplied.Players[0].Copy(), supplied.Players[1].Copy() }, Tactics = new[] { supplied.Tactics[0].Copy(), supplied.Tactics[1].Copy() } };
+            surface = supplied.Surface == null ? null : supplied.Surface.Copy();
+            surface?.Validate();
+            input = new MatchInput { Seed = supplied.Seed, Config = supplied.Config.Copy(), Players = new[] { supplied.Players[0].Copy(), supplied.Players[1].Copy() }, Tactics = new[] { supplied.Tactics[0].Copy(), supplied.Tactics[1].Copy() }, Surface = surface };
             config = input.Config; this.stopAfterPoints = stopAfterPoints; rng = new SeedRandom(input.Seed);
             score = new Scoring(config.FirstServer, config.InitialEndA);
             tactics = new[] { input.Tactics[0].Copy(), input.Tactics[1].Copy() };
@@ -157,7 +161,7 @@ namespace TennisSim.Core
             int receiver = 1 - hitter; var rp = input.Players[receiver];
             if (!receiverPlanned && time - lastHitTime + 1e-9 >= rp.ReactionSeconds)
             {
-                receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out double arrival, out bool reachable);
+                receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out double arrival, out bool reachable, surface);
                 receiverPlanned = true;
                 var action = Emit("ContactPrepared", time, receiver, reason: reachable ? "PredictedReachable" : "UnreachableContact", action: receiverAction);
                 action.IntendedTarget = receiverTarget; action.PredictedContactTime = time + arrival;
@@ -175,6 +179,7 @@ namespace TennisSim.Core
                 ball = collision.Before; var before = Snapshot(at);
                 ball = collision.After;
                 var ev = Emit(collision.Kind, at, hitter, action: activeAction); ev.Before = before;
+                if (collision.Bounce != null) ev.Bounce = collision.Bounce;
                 if (collision.Kind == "BallBounced")
                 {
                     if (ball.Bounces == 1)
@@ -206,7 +211,7 @@ namespace TennisSim.Core
                     else { EndPoint(hitter, "UnreturnedBall", at); stopped = true; return false; }
                 }
                 return true;
-            });
+            }, surface);
             ball = advanced;
             if (!ball.Position.IsFinite || !ball.Velocity.IsFinite) throw new SimulationLimitExceeded("Non-finite ball state");
             if (stopped)

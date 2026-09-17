@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TennisSim.Core.Bounce;
 
 namespace TennisSim.Core
 {
@@ -18,6 +19,9 @@ namespace TennisSim.Core
         public PlayerProfile[] Players { get; set; } = { PlayerProfile.Preset("baseline", "A"), PlayerProfile.Preset("defender", "B") };
         public Tactic[] Tactics { get; set; } = { new Tactic(), new Tactic() };
         public List<TacticInstruction> Instructions { get; set; } = new List<TacticInstruction>();
+        // Null keeps the legacy multiplicative bounce. A surface environment selects the explicit
+        // impulse model and carries the profile identity into the replay.
+        public SurfaceEnvironment? Surface { get; set; }
     }
     public sealed class FrameState
     {
@@ -48,6 +52,8 @@ namespace TennisSim.Core
         public List<Candidate>? Candidates { get; set; }
         public FrameState? Before { get; set; }
         public FrameState State { get; set; } = new FrameState();
+        // Impulse-model diagnostics for BallBounced collisions. Null under the legacy bounce.
+        public BounceResult? Bounce { get; set; }
     }
     public sealed class Ratio
     {
@@ -84,7 +90,7 @@ namespace TennisSim.Core
     public sealed class MatchRecord
     {
         public string SchemaVersion { get; set; } = "1.0";
-        public string EngineVersion { get; set; } = "tennissim-mvp-1";
+        public string EngineVersion { get; set; } = "tennissim-mvp-3";
         public string Rules { get; set; } = "Singles; one set; advantage games; 6 games by 2; 6-6 seven-point tiebreak by 2; service lets";
         public bool RealismCalibrated { get; set; }
         public MatchInput Input { get; set; } = new MatchInput();

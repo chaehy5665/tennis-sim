@@ -1,0 +1,32 @@
+{
+  "id": "example-state-dependent-unc",
+  "revision": 1,
+  "modelId": "V1-plane-impulse",
+  "ballSpecId": "type2-nominal",
+  "surfaceId": "example-flat",
+  "supportedConditions": [
+    "design example only; no measured evidence and no fitted parameters"
+  ],
+  "vrefMS": 10,
+  "normalResponse": { "kind": "StateDependentSigmoid", "en0": 0, "a0": 1.6, "a1": 0.5, "a2": 0.3 },
+  "frictionResponse": { "kind": "StateDependentSigmoid", "mu0": 0, "muMax": 0.9, "b0": -0.4, "b1": 0.6 },
+  "tangentialResponse": { "kind": "ConstantBeta", "beta": 0.2, "c0": 0 },
+  "domain": { "snMin": 0, "snMax": 20, "stMin": 0, "stMax": 40, "suMin": 0, "suMax": 40 },
+  "table": null,
+  "evidence": "ASSUMED_PRIOR",
+  "calibrationStatus": "UNCALIBRATED",
+  "validationStatus": "NOT_RUN",
+  "release": "BLOCKED",
+  "sourceDatasetHash": "",
+  "calibrationRunId": "",
+  "notes": "Synthetic state-dependent example. Used only to measure lookup-table interpolation error against the analytic evaluator. Not fitted, not measured, not for gameplay.",
+  "parameters": [
+    { "parameter": "en.a0", "status": "FIXED", "value": 1.6, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false },
+    { "parameter": "en.a1", "status": "FIXED", "value": 0.5, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false },
+    { "parameter": "en.a2", "status": "FIXED", "value": 0.3, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false },
+    { "parameter": "mu_max", "status": "FIXED", "value": 0.9, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false },
+    { "parameter": "mu.b0", "status": "FIXED", "value": -0.4, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false },
+    { "parameter": "mu.b1", "status": "FIXED", "value": 0.6, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false },
+    { "parameter": "beta_grip", "status": "FIXED", "value": 0.2, "standardError": null, "bootstrapLow": null, "bootstrapHigh": null, "atBoundary": false }
+  ]
+}

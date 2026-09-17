@@ -1,0 +1,23 @@
+{
+  "generator": "TennisSim.Calibration Synthetic.Generate",
+  "evidenceType": "SYNTHETIC",
+  "recordFile": "records.jsonl",
+  "recordCount": 240,
+  "recordFileHash": "33f839bbf08ecd4b288204b527238d9e991e58a0d06cf7ad6ca909076c030df8",
+  "spec": {
+    "count": 240,
+    "seed": 20260915,
+    "sessions": 12,
+    "datasetId": "synthetic-type2-flat",
+    "sourceId": "SNT1",
+    "surfaceId": "synthetic-flat",
+    "truthEn": 0.83,
+    "truthMu": 0.35,
+    "truthBeta": 0,
+    "velocityNoiseMS": 0.25,
+    "angularNoiseRadS": 15,
+    "spinMeasuredFraction": 0.7,
+    "spinAfterObservedFraction": 0.6
+  },
+  "note": "SYNTHETIC records produced from a published truth vector. They verify software behaviour and must never be reported as measurements."
+}

@@ -1,5 +1,6 @@
 using TennisSim.Core;
 using TennisSim.Cli;
+using TennisSim.Tests;
 
 int passed = 0, failed = 0;
 void Test(string name, Action test)
@@ -67,10 +68,12 @@ Test("Service diagonal changes with both court end and deuce side", () =>
 Test("Line footprint inside, tangent and outside singles/service boundaries", () =>
 {
     Check(Court.SinglesIn(new Vec3(4.114, 0, 11.885), 1));
-    Check(Court.SinglesIn(new Vec3(Court.HalfWidth + Court.BallRadius, 0, Court.HalfLength + Court.BallRadius), 1));
+    // A circular footprint misses a corner when both offsets equal its radius.
+    Check(!Court.SinglesIn(new Vec3(Court.HalfWidth + Court.BallRadius, 0, Court.HalfLength + Court.BallRadius), 1));
     Check(!Court.SinglesIn(new Vec3(Court.HalfWidth + Court.BallRadius + 1e-6, 0, 3), 1));
     Check(!Court.SinglesIn(new Vec3(0, 0, Court.HalfLength + Court.BallRadius + 1e-6), 1));
-    Check(Court.ServiceIn(new Vec3(-Court.BallRadius, 0, -6.4 - Court.BallRadius), 1, true));
+    Check(!Court.ServiceIn(new Vec3(-Court.BallRadius, 0, -6.4 - Court.BallRadius), 1, true));
+    Check(Court.ServiceIn(new Vec3(1, 0, -6.4 - Court.BallRadius), 1, true));
     Check(!Court.ServiceIn(new Vec3(-Court.BallRadius - 1e-6, 0, -4), 1, true));
     Check(!Court.ServiceIn(new Vec3(2, 0, -6.4 - Court.BallRadius - 1e-6), 1, true));
 });
@@ -297,5 +300,47 @@ Test("Low-control independent points exercise real faults, lets and double fault
     }
     Console.WriteLine($"  serve stress: faults={faults} doubleFaults={doubles} lets={lets}"); Check(faults > 0 && doubles > 0 && lets > 0);
 });
+Test("Independent audit correctness scenarios", () =>
+{
+    var results = AuditScenarios.Run();
+    foreach (var result in results.Where(r => r.Category == "CORRECTNESS_BUG")) Check(result.Status == "PASS", result.Name + ": " + result.Observed);
+});
+Test("Diagnostics preserve replay and random state; empty samples are not PASS", () =>
+{
+    string before = ReplayJson.Serialize(sample);
+    var report = Diagnostics.Analyze(sample!, "sample.json", Diagnostics.Hash(before), "test-source");
+    Check(ReplayJson.Serialize(sample) == before, "Observation mutated record");
+    Check(report.Issues.Count == 0);
+    Check(report.Metrics["Serve.launchSpeed"].Samples == sample!.Events.Count(e => e.ShotKind == "Serve"));
+    var empty = Diagnostics.Analyze(new MatchRecord(), "empty.json", "none", "test-source");
+    Check(empty.Checks.Values.All(c => c.Status == "NOT_MEASURABLE"));
+    Check(empty.Metrics["Serve.launchSpeed"].Mean == null);
+});
+Test("Diagnostics catch actual out-of-reach state and exclude resets/dt zero", () =>
+{
+    var copy = ReplayJson.Deserialize<MatchRecord>(ReplayJson.Serialize(sample));
+    var hit = copy.Events.First(e => e.Kind == "BallHit" && e.ShotKind != "Serve");
+    hit.State.Players.Single(p => p.Id == hit.PlayerId).Position += new Vec3(100, 0, 0);
+    var report = Diagnostics.Analyze(copy, "injected.json", "test", "test-source");
+    Check(report.Checks["CONTACT_REACH"].Failures == 1);
+    // Same-time duplicated frame is legal; point reset itself must not count as fast movement.
+    copy = ReplayJson.Deserialize<MatchRecord>(ReplayJson.Serialize(sample));
+    copy.Frames.Insert(1, copy.Frames[0]);
+    report = Diagnostics.Analyze(copy, "duplicate.json", "test", "test-source");
+    Check(report.Checks["PLAYER_DISPLACEMENT"].Failures == 0);
+    Check(report.Metrics["A.movementDistance"].Excluded["dt<=0"] == 1);
+});
+Test("Diagnostic parser rejects missing velocity instead of observing zero", () =>
+{
+    string json = ReplayJson.Serialize(sample);
+    Check(ReplayJson.Serialize(Diagnostics.Parse(json)) == json);
+    var node = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+    node["events"]![4]!["state"]!["ball"]!.AsObject().Remove("velocity");
+    bool rejected = false;
+    try { Diagnostics.Parse(node.ToJsonString()); } catch (ArgumentException) { rejected = true; }
+    Check(rejected, "Missing outgoing velocity must not default to an observed zero");
+});
+BounceTests.Run(Test);
+CalibrationTests.Run(Test);
 Console.WriteLine($"TEST_RESULT passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;

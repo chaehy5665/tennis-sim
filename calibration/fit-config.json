@@ -1,0 +1,29 @@
+{
+  "model": "M2",
+  "trainSplit": "train",
+  "validationSplit": "validation",
+  "testSplit": "test",
+  "vrefMS": 10,
+  "huberDelta": 1.5,
+  "priorLambda": 0,
+  "muMaxCap": 2,
+  "parameterBoundAbs": 8,
+  "normalApproachFloorMS": 0.5,
+  "angleFloorTangentialMS": 1,
+  "maxEvaluations": 30000,
+  "initialStep": 0.2,
+  "shrink": 0.5,
+  "stopStep": 1e-7,
+  "bootstrapResamples": 40,
+  "bootstrapSeed": 20260915,
+  "bootstrapStopStep": 0.0001,
+  "validationRmseGainForComplexity": 0.03,
+  "targets": {
+    "normalSpeedRmseMS": 0.5,
+    "tangentialSpeedRmseMS": 1.0,
+    "angularSpeedRmseRpm": 300,
+    "exitAngleRmseDeg": 2.0,
+    "cprSpreadPoints": 2.0
+  },
+  "extraStarts": []
+}

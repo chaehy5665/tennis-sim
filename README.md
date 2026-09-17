@@ -58,6 +58,7 @@ dotnet run --project src/TennisSim.Cli --no-build -- resimulate \
 - `tests/TennisSim.Tests`: 규칙/수학/이동/전술/재현성/통합 검증.
 - [MODEL.md](docs/MODEL.md): 단위·공식·선택 가중치·모델 한계.
 - [REPLAY_CONTRACT.md](docs/REPLAY_CONTRACT.md): 상태, 사건, 준비 동작 연결 및 재생 권한.
+- [DETERMINISM.md](docs/DETERMINISM.md): 동일 플랫폼 byte 결정론과 플랫폼 간 outcome/semantic/bitwise 재현성 계약.
 - [VALIDATION.md](docs/VALIDATION.md): 실제 실행 결과와 규모.
 
 큰 기록은 `artifacts/`에 생성되며 `.gitignore`로 제외한다. `.tools/`, `bin/`, `obj/`도 제외한다. 초기 폴더는 Git 저장소가 아니었으며 이 작업은 Git 초기화, commit, push를 수행하지 않는다.
@@ -66,6 +67,62 @@ dotnet run --project src/TennisSim.Cli --no-build -- resimulate \
 
 미구현: 발리, 스매시, 드롭샷, 복식, 다세트, 풋폴트, 신체/라켓/네트 접촉 위반, 타이브레이크 뒤 다음 세트, 대회별 규칙, 정교한 네트/라켓/스핀 물리, 애니메이션과 3D 표시, 임의 시점 저장/재개. 타격 접촉 판정은 고정 tick 끝에서 수행하며 최대 8.33ms 시간 양자화가 있다. 네트와 바운드는 tick 내부 충돌 시각을 계산한다. 모든 테니스 규칙 구현을 주장하지 않는다.
 
-`UNITY_RUNTIME_VERIFIED=false`, `REALISM_CALIBRATED=false`. 계수와 가상 선수는 게임용 가정이다. 랠리 길이, 낮은 타점에서의 공격 후보 탈락, 프리셋 간 점수 편향을 실측과 비교하지 않았다. 플랫폼 간 비트 단위 재현성도 주장하지 않는다.
+`UNITY_RUNTIME_VERIFIED=false`, `REALISM_CALIBRATED=false`. 계수와 가상 선수는 게임용 가정이다. 랠리 길이, 낮은 타점에서의 공격 후보 탈락, 프리셋 간 점수 편향을 실측과 비교하지 않았다. Linux x64와 Mac의 seed 42 비교는 outcome exact 및 semantic-with-tolerance PASS, 전체 replay bitwise FAIL이다. 범위와 증거는 [DETERMINISM.md](docs/DETERMINISM.md)를 따른다.
 
 다음 최소 단계: **같은 Core 기록을 단순 3D 코트·선수 캡슐·공으로 표시해 이동과 타격 시각을 대조한다.** 렌더러가 경기 결과를 보정하지 않도록 유지한다.
+
+## Realism diagnostics (2026-09-14)
+
+Read-only `diagnose` sidecars, actual-Core fixed `scenarios`, before/after evidence and the first circular-footprint corner correction are documented in [REALISM_AUDIT.md](docs/REALISM_AUDIT.md) and [CALIBRATION.md](docs/CALIBRATION.md). No physics/player parameters were tuned. Engine v2 retains replay schema 1.0 and viewer loading of the v1 sample. Full realism and candidate Mac visual verification remain unclaimed.
+
+
+## Court surface and bounce model (2026-09-15)
+
+The engine now contains an explicit ball-surface collision model (V1) and an offline calibration pipeline.
+The previous multiplicative bounce remains the default path and is numerically unchanged; the impulse model is
+selected explicitly.
+
+    # single impact, profile and full diagnostics
+    dotnet run --project src/TennisSim.Cli --no-build -- bounce \
+      --input artifacts/impact.json --surface-model impulse \
+      --profile profiles/pair.json --out artifacts/bounce.json
+
+    # full set with the impulse model and the built-in UNCALIBRATED design profile
+    dotnet run --project src/TennisSim.Cli --no-build -- match \
+      --seed 42 --surface-model impulse --out artifacts/impulse-42.json
+
+    # calibration tool
+    dotnet run --project src/TennisSim.Calibration --no-build -- validate-data --dataset data/bounce/manifest.json
+    dotnet run --project src/TennisSim.Calibration --no-build -- fit \
+      --dataset data/bounce/manifest.json --config calibration/fit-config.json \
+      --models M1,M2 --synthetic --out artifacts/calibration/run-001
+    dotnet run --project src/TennisSim.Calibration --no-build -- evaluate --run artifacts/calibration/run-001 --split test
+    dotnet run --project src/TennisSim.Calibration --no-build -- virtual-itf \
+      --profile artifacts/calibration/run-001/profile.json --temperature-c 23
+    dotnet run --project src/TennisSim.Calibration --no-build -- export-profile \
+      --run artifacts/calibration/run-001 --out profiles/pair.json --table-nodes 5
+    dotnet run --project src/TennisSim.Calibration --no-build -- compare-runtime \
+      --profile profiles/pair.json --table-nodes 5 --probes 9
+
+`EngineVersion` is now tennissim-mvp-3 (replay schema 1.0 unchanged, renderer accepts v1, v2 and v3).
+Legacy-path bytes are unchanged apart from the version string. The impulse model is a different physics
+version, so resimulate refuses older replays instead of guessing.
+
+Status of this work:
+
+    SOFTWARE_IMPLEMENTED: PASS
+    MATHEMATICAL_TESTS: PASS (57 core tests, 44/45 CLI scenarios; the single FAIL is the preserved default-drag reference gap)
+    ENGINE_INTEGRATION: PASS (selectable model; default path unchanged)
+    EMPIRICAL_DATA: MISSING
+    EMPIRICAL_CALIBRATION: NOT_RUN
+    SPIN_VALIDATION: NOT_OBSERVED in match play (validated in analytic fixtures only)
+    MODEL_ADEQUACY: UNDETERMINED (no measured data)
+    PROFILE_RELEASE: BLOCKED (runtime default DEV_ONLY, UNCALIBRATED)
+    CROSS_PLATFORM_BITWISE_REPRODUCIBILITY: NOT_TESTED
+    CROSS_PLATFORM_NUMERICAL_EQUIVALENCE: NOT_TESTED
+    CROSS_PLATFORM_EVENT_EQUIVALENCE: NOT_TESTED
+
+Details: [integration-notes.md](integration-notes.md), [docs/BOUNCE_MODEL.md](docs/BOUNCE_MODEL.md),
+[docs/CALIBRATION_PIPELINE.md](docs/CALIBRATION_PIPELINE.md), [reports/model-card.md](reports/model-card.md),
+[reports/calibration-report.md](reports/calibration-report.md),
+[reports/reproducibility-report.md](reports/reproducibility-report.md).

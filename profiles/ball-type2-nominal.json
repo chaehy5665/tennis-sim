@@ -1,0 +1,13 @@
+{
+  "id": "type2-nominal",
+  "revision": 1,
+  "massKg": 0.0577,
+  "radiusM": 0.0335,
+  "inertiaFactorKappa": 0.55,
+  "provenance": "ASSUMED_PRIOR",
+  "massUncertaintyKg": null,
+  "radiusUncertaintyM": null,
+  "inertiaFactorUncertainty": null,
+  "notes": "nominal_not_measured; Type 2 regulation range is 56.0-59.4 g and 6.54-6.86 cm diameter; kappa=0.55 is a literature approximation, not an ITF constant",
+  "inertiaKgM2": 3.561460375000001E-05
+}

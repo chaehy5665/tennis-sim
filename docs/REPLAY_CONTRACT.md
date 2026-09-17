@@ -1,6 +1,6 @@
 # 리플레이 계약 v1.0
 
-`TennisSim.Core`의 `MatchRecord`는 파일/JSON을 모르고 데이터만 제공한다. CLI의 `ReplayJson`이 camelCase JSON과 enum 문자열로 저장한다. 엔진 식별자는 `tennissim-mvp-1`. 동작 변경 시 엔진 버전을 올려야 한다. Git 소스 식별자가 없는 현재 폴더에서는 이 수동 버전을 사용한다.
+`TennisSim.Core`의 `MatchRecord`는 파일/JSON을 모르고 데이터만 제공한다. CLI의 `ReplayJson`이 camelCase JSON과 enum 문자열로 저장한다. 현재 schema는 `1.0`, 현재 엔진 식별자는 `tennissim-mvp-2`이며 원본 golden fixture는 `tennissim-mvp-1`이다. 동작 변경 시 엔진 버전을 올려야 한다. Git commit만으로 dirty candidate를 식별하지 않고 calibration source manifest와 수동 엔진 버전을 함께 사용한다.
 
 ## 최상위 데이터
 
@@ -16,7 +16,7 @@
 | status / diagnostic | Completed, PointBatchComplete, SimulationLimitExceeded; 제한 원인 |
 | finalRandomState | 진단용 xorshift32 상태. 중간 저장 재개 계약이 아님 |
 
-난수는 xorshift32(shift 13/17/5), uint32 상태. seed=0은 0x6D2B79F5로 치환한다. 균등수는 uint/2³². 전역 Random이나 시각 seed를 사용하지 않는다. 컬렉션 생성/순회와 동일 tick 지시 순서를 고정한다. 동일 코드·입력·런타임에서 tick 묶음을 달리해도 전체 JSON이 일치하는지 테스트한다. 부동소수점/Math.Exp/Math.Log의 플랫폼 차이는 검증하지 않았다.
+난수는 xorshift32(shift 13/17/5), uint32 상태. seed=0은 0x6D2B79F5로 치환한다. 균등수는 uint/2³². 전역 Random이나 시각 seed를 사용하지 않는다. 컬렉션 생성/순회와 동일 tick 지시 순서를 고정한다. 동일 코드·입력·런타임에서 tick 묶음을 달리해도 전체 JSON이 일치하는지 테스트한다. Linux x64와 Mac의 seed 42에서는 outcome과 허용오차 기반 의미 데이터가 일치했지만 `Math.Exp` 경로 이후 전체 bytes는 달랐다. 판정 범위와 허용오차는 [DETERMINISM.md](DETERMINISM.md)를 따른다.
 
 ## 상태
 
@@ -56,7 +56,7 @@ ContactPrepared는 3D 모션 준비의 단서이며 실제 접촉은 BallHit에 
 
 ## Unity Viewer 어댑터 — 2026-09-14 추가
 
-위 기록 형식 **schemaVersion=1.0**과 **engineVersion=tennissim-mvp-1**을 직접 읽는다. 새 schema/CLI 옵션/viewer 전용 출력은 없다. 원본 JSON의 전체 input/config/instructions 및 도메인 사건은 그대로 유지된다. 샘플 준비는 원본 파일을 바이트 그대로 복사한다. EngineVersion을 검사하므로 다른 엔진의 좌표를 추측해 표시하지 않는다.
+위 기록 형식 **schemaVersion=1.0**과 **engineVersion=tennissim-mvp-1 또는 tennissim-mvp-2**를 직접 읽는다. 새 schema/CLI 옵션/viewer 전용 출력은 없다. 원본 JSON의 전체 input/config/instructions 및 도메인 사건은 그대로 유지된다. 샘플 준비는 원본 파일을 바이트 그대로 복사한다. EngineVersion을 검사하므로 지원하지 않는 엔진의 좌표를 추측해 표시하지 않는다.
 
 `unity/TennisSim.UnityViewer/Assets/TennisSim/Runtime/Data`는 Unity/Core에 의존하지 않는 **표시 전용 어댑터**다. StrictJson → ReplayLoader → ReplayValidator → ReplayTimeline → ReplayStateSampler → ReplayController 순서이며, ReplayPresenter만 Unity 오브젝트를 다룬다. Unity에서 재시뮬레이션하지 않는다.
 
@@ -86,3 +86,31 @@ ContactPrepared는 3D 모션 준비의 단서이며 실제 접촉은 BallHit에 
 엔진 위치 비교 허용 오차는 **1e-7m**, Unity float Transform 비교는 **1e-6m**다. 확대 공은 지름만 3배이며 중심/사건 위치는 동일하다. 표시 해상도는 엔진 타격의 최대 8.33ms 시간 해상도를 개선하지 않는다. 정확한 매 tick 궤적이 필요해지면 별도 관측 출력이 필요하지만 이번에는 기존 기록과 단순 보간만 사용한다.
 
 코트 메타데이터는 JSON에 없으므로 검증된 engineVersion의 `src/TennisSim.Core/Geometry.cs` 값에 계약을 묶는다: HalfWidth=4.115m, HalfLength=11.885m, ServiceLine=6.4m, BallRadius=0.0335m. 네트는 원본 높이 프로파일을 20 strip으로 근사하며 렌더링만 담당한다. 이전 섹션의 “미구현 3D 클라이언트”는 초기 기록이며, 현재 소스 구현과 Unity 검증 상태는 [UNITY_VIEWER.md](UNITY_VIEWER.md), [UNITY_VALIDATION.md](UNITY_VALIDATION.md)를 따른다.
+
+## Engine v2 — realism audit correction
+
+`tennissim-mvp-2` corrects circular footprint intersection at outside court/service-box corners. Schema 1.0, dimensions, coordinates and event semantics are unchanged. The viewer explicitly accepts both v1 and v2. Current-engine `resimulate` requires v2; displaying a v1 replay does not require recreating its outcomes. Original v1 sample remains the golden fixture. Diagnostic sidecars are not required by the viewer. Details: [REALISM_AUDIT.md](REALISM_AUDIT.md).
+
+
+## Engine v3 — surface model and bounce diagnostics
+
+tennissim-mvp-3 keeps schema 1.0 and adds optional fields. The viewer accepts tennissim-mvp-1, -2 and -3.
+
+- MatchInput.Surface (optional): the surface environment for the explicit impulse model — ball spec, ball
+  condition, interaction profile and tolerances. Absent (null) for the legacy multiplicative bounce. It is
+  part of input, so a replay is self-describing and resimulation reproduces it.
+- MatchEvent.Bounce (optional, BallBounced only): the impulse-model diagnostics for that contact — post state,
+  normal and tangential impulses, pre/post contact slip, used en / mu_eff / beta, beta_effective, the active
+  impulse limit, energies, profile id / revision / content hash, model id, outOfDomain, status and warnings.
+- BallState.AngularVelocity (optional): spin, carried through flight. Omitted while zero, which is why a
+  legacy-path replay keeps its previous bytes.
+
+Both optional fields are omitted when unused, so no existing replay changes and no viewer is forced to read
+them. Missing required keys are still rejected exactly as before.
+
+Contact semantics: RESOLVED applies the impulse; SETTLED is a resting contact with no impulse (warning
+SETTLED_CONTACT) and still counts as a surface contact, so the first/second bounce rules are unaffected;
+SEPARATING_NO_IMPULSE, TANGENTIAL_CONTACT_NO_IMPULSE and DEEP_INITIAL_PENETRATION apply no impulse and, being
+penetration or resting corrections rather than resolved contacts, do not create a bounce event. A physics
+version change is expected to change outcomes, so resimulate refuses a replay whose engine version differs
+instead of guessing, and the two models are not required to agree.

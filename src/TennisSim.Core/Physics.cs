@@ -1,8 +1,17 @@
 using System;
 using System.Collections.Generic;
+using TennisSim.Core.Bounce;
 
 namespace TennisSim.Core
 {
+    // Physical epsilons kept separate per unit. One dimensionless epsilon is never reused for
+    // lengths, speeds, times and contact classification.
+    public static class PhysicsEpsilons
+    {
+        public const double RemainingStepS = 1e-12;
+        public const double NetPlaneM = 1e-10;
+    }
+
     public sealed class SimConfig
     {
         public double TickSeconds { get; set; } = 1.0 / 120;
@@ -31,6 +40,9 @@ namespace TennisSim.Core
     {
         public Vec3 Position { get; set; }
         public Vec3 Velocity { get; set; }
+        // Spin is carried through flight in both models. Only the impulse model consumes it;
+        // the legacy multiplicative bounce ignores it and never generates it.
+        public Vec3 AngularVelocity { get; set; }
         public int Bounces { get; set; }
         public bool NetTouched { get; set; }
         public bool CrossedNet { get; set; }
@@ -42,6 +54,8 @@ namespace TennisSim.Core
         public double Offset { get; set; }
         public BallState Before { get; set; } = new BallState();
         public BallState After { get; set; } = new BallState();
+        // Present only for impulse-model ground contacts; null under the legacy model.
+        public BounceResult? Bounce { get; set; }
     }
     public static class BallPhysics
     {
@@ -72,20 +86,27 @@ namespace TennisSim.Core
             return hi;
         }
         // Callback can stop at the exact event, before any remaining part of the tick is advanced.
-        public static BallState Advance(BallState start, double dt, SimConfig c, Func<Collision, bool>? onCollision = null)
+        // surface == null keeps the legacy multiplicative bounce. With a surface environment the
+        // ground contact resolves through the explicit impulse model exactly once per contact.
+        public static BallState Advance(BallState start, double dt, SimConfig c, Func<Collision, bool>? onCollision = null, SurfaceEnvironment? surface = null)
         {
             var b = start.Copy(); double elapsed = 0;
-            for (int count = 0; elapsed < dt - 1e-12; count++)
+            for (int count = 0; elapsed < dt - PhysicsEpsilons.RemainingStepS; count++)
             {
                 if (count > 12) throw new SimulationLimitExceeded("Too many collisions in a physics step");
                 double remaining = dt - elapsed;
                 var end = At(b, remaining, c);
-                double ground = end.Position.Y <= Court.BallRadius && (b.Position.Y > Court.BallRadius || b.Velocity.Y < 0) ? Root(b, remaining, c, true) : double.PositiveInfinity;
-                double net = !b.CrossedNet && b.Position.Z * end.Position.Z <= 0 && Math.Abs(b.Position.Z) > 1e-10 ? Root(b, remaining, c, false) : double.PositiveInfinity;
+                bool impulseModel = surface != null && surface.Model == BounceModelKind.ImpulseV1;
+                // The impulse path also detects a surface return that starts exactly on the surface and
+                // ends below it inside one step; the legacy path keeps its previous detection rule.
+                double ground = end.Position.Y <= Court.BallRadius && (b.Position.Y > Court.BallRadius || b.Velocity.Y < 0 || (impulseModel && end.Position.Y < Court.BallRadius)) ? Root(b, remaining, c, true) : double.PositiveInfinity;
+                double net = !b.CrossedNet && b.Position.Z * end.Position.Z <= 0 && Math.Abs(b.Position.Z) > PhysicsEpsilons.NetPlaneM ? Root(b, remaining, c, false) : double.PositiveInfinity;
                 double t = Math.Min(ground, net);
                 if (double.IsInfinity(t)) return end;
                 b = At(b, t, c); elapsed += t;
                 var before = b.Copy(); string kind;
+                BounceResult? bounce = null;
+                bool settled = false;
                 if (net < ground)
                 {
                     b.CrossedNet = true;
@@ -96,11 +117,52 @@ namespace TennisSim.Core
                 }
                 else
                 {
-                    kind = "BallBounced"; b.Position = new Vec3(b.Position.X, Court.BallRadius, b.Position.Z);
-                    b.Velocity = new Vec3(b.Velocity.X * c.GroundFriction, Math.Abs(b.Velocity.Y) * c.Restitution, b.Velocity.Z * c.GroundFriction); b.Bounces++;
+                    kind = "BallBounced";
+                    if (impulseModel)
+                    {
+                        // t* found by bisection, pre-state evaluated at t*, one surface sample,
+                        // exactly one ResolveBounce call, then the remaining flight integrates.
+                        var pre = new ImpactState
+                        {
+                            PositionM = b.Position,
+                            VelocityMS = b.Velocity,
+                            AngularVelocityRadS = b.AngularVelocity,
+                            ImpactTimeS = elapsed
+                        };
+                        // Contact point on the surface plane, not the ball centre height.
+                        var sample = surface!.Sample(new Vec3(b.Position.X, 0, b.Position.Z));
+                        bounce = BounceModel.Resolve(pre, surface.Ball, surface.Condition, sample, surface.Profile, surface.Tolerances);
+                        if (bounce.Status == BounceStatus.RESOLVED || bounce.Status == BounceStatus.SETTLED)
+                        {
+                            b.Position = bounce.PostState.PositionM;
+                            b.Velocity = bounce.PostState.VelocityMS;
+                            b.AngularVelocity = bounce.PostState.AngularVelocityRadS;
+                            b.Bounces++;
+                            settled = bounce.Status == BounceStatus.SETTLED;
+                        }
+                        else
+                        {
+                            // Settling and contact policy. A contact that resolves to no impulse is not a
+                            // bounce event: hold the ball on the surface, remove the unresolved normal
+                            // approach, and end the step so the remainder cannot re-enter forever.
+                            b.Position = sample.ContactPositionM + sample.Normal * surface.Ball.RadiusM;
+                            double normalSpeed = BounceModel.Dot(b.Velocity, sample.Normal);
+                            if (normalSpeed < 0) b.Velocity = b.Velocity - sample.Normal * normalSpeed;
+                            return b;
+                        }
+                    }
+                    else
+                    {
+                        b.Position = new Vec3(b.Position.X, Court.BallRadius, b.Position.Z);
+                        b.Velocity = new Vec3(b.Velocity.X * c.GroundFriction, Math.Abs(b.Velocity.Y) * c.Restitution, b.Velocity.Z * c.GroundFriction);
+                        b.Bounces++;
+                    }
                 }
-                var collision = new Collision { Kind = kind, Offset = elapsed, Before = before, After = b.Copy() };
+                var collision = new Collision { Kind = kind, Offset = elapsed, Before = before, After = b.Copy(), Bounce = bounce };
                 if (onCollision != null && !onCollision(collision)) return b;
+                // A settled contact ends the step: the ball rests on the surface and no further
+                // contact inside this step is physically meaningful.
+                if (settled) return b;
             }
             return b;
         }

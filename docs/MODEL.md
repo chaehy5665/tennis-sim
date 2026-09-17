@@ -73,3 +73,21 @@ Attack 가중치는 추가로 `(.25+.75*control)*preparationQuality`를 곱한�
 Shots와 속도/목표는 모든 BallHit(폴트/렛 서브 포함)를 센다. Forehands/Backhands와 백핸드 공략 분모는 비서브 타격만 센다. `BackhandTargetSelection`은 Backhand라는 후보를 선택한 비율이며, 실제 상대의 백핸드 타격과 동일한 의미가 아니다. 실제 타점은 다음 BallHit의 Stroke로 확인한다. FirstLandings는 각 샷의 첫 바운드(폴트/렛 포함)만 저장한다. 사건의 actionId로 목표와 착지를 연결할 수 있다. RallyLengths는 합법 서브와 이어지는 타격 수이며 마지막 네트/아웃 타격을 포함, 실패한 서브/렛은 제외한다. 더블 폴트 랠리 길이는 0이다. 모든 비율은 분자/분모를 저장한다.
 
 기술 제한: 포인트 24,000 ticks, 세트 1,000포인트, 한 포인트 서브 시도/렛 100회. 초과 시 기존 점수와 진단을 남기고 종료한다. 승자나 완료된 경기로 취급하지 않는다.
+
+
+## 공-코트 충돌 모델 (2026-09-15 추가)
+
+기본 경로는 위의 기존 곱셈 바운스이며 수치가 바뀌지 않았다. 명시적 충돌 모델은
+--surface-model impulse로 선택하며, 이때 지면 충돌은 BounceModel.Resolve(V1 평면 충격량 모델)가 한 번
+호출되어 처리된다. 좌표계는 기존 X/Y/Z를 그대로 쓰고, 스핀(각속도)은 상태에 포함되어 비행 중 그대로
+유지되지만 타격 시 스핀을 생성하지는 않는다(마그누스, 스핀 감쇠, 구름 저항 없음).
+
+충돌 상태는 RESOLVED, SETTLED, SEPARATING_NO_IMPULSE, TANGENTIAL_CONTACT_NO_IMPULSE,
+DEEP_INITIAL_PENETRATION, NUMERICAL_FAILURE로 구분한다. 낮은 에너지 접촉은 되튐을 무한히 만들지 않고
+SETTLED 정책으로 표면에 정지시키며, 한 스텝 안의 접촉이 12회를 넘으면 진단과 함께 종료한다. 침투 보정만으로
+새 바운드 사건을 만들지 않는다. 계수는 BallSpec·SurfaceDefinition과 분리된 InteractionProfile
+(공-표면 조합)에만 존재하고, 저장소의 기본 프로필은 UNCALIBRATED/ASSUMED_PRIOR/DEV_ONLY이다.
+
+불변량, 수식, 이벤트 필드, 알려진 한계는 [BOUNCE_MODEL.md](BOUNCE_MODEL.md), 보정 절차와 게이트는
+[CALIBRATION_PIPELINE.md](CALIBRATION_PIPELINE.md)를 따른다. 실측 충돌 자료가 없으므로
+EMPIRICAL_CALIBRATION=NOT_RUN, PROFILE_RELEASE=BLOCKED이다.

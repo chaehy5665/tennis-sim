@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tennissim.local/schemas/interaction-profile.schema.json",
+  "title": "TennisSim interaction profile",
+  "description": "Validated coefficients for exactly one ball-surface combination. Release is BLOCKED unless the profile is approved; SYNTHETIC evidence can never be CALIBRATED_IN_DOMAIN.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "revision", "modelId", "ballSpecId", "surfaceId", "vrefMS", "normalResponse", "frictionResponse", "tangentialResponse", "evidence", "calibrationStatus", "validationStatus", "release"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "modelId": { "const": "V1-plane-impulse" },
+    "ballSpecId": { "type": "string" },
+    "surfaceId": { "type": "string" },
+    "supportedConditions": { "type": "array", "items": { "type": "string" } },
+    "vrefMS": { "type": "number", "exclusiveMinimum": 0 },
+    "normalResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["Constant", "StateDependentSigmoid"] },
+        "en0": { "type": "number", "minimum": 0, "maximum": 1 },
+        "a0": { "type": "number" },
+        "a1": { "type": "number" },
+        "a2": { "type": "number" }
+      }
+    },
+    "frictionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["Constant", "StateDependentSigmoid"] },
+        "mu0": { "type": "number", "minimum": 0 },
+        "muMax": { "type": "number", "exclusiveMinimum": 0 },
+        "b0": { "type": "number" },
+        "b1": { "type": "number" }
+      }
+    },
+    "tangentialResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["Zero", "ConstantBeta", "StateDependentSigmoid"] },
+        "beta": { "type": "number", "minimum": 0, "maximum": 1 },
+        "c0": { "type": "number" }
+      }
+    },
+    "domain": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "Bounds on the coefficient evaluation point only. Physical inputs are never modified; an excursion is reported as OUT_OF_DOMAIN.",
+      "properties": {
+        "snMin": { "type": ["number", "null"], "minimum": 0 },
+        "snMax": { "type": ["number", "null"], "minimum": 0 },
+        "stMin": { "type": ["number", "null"], "minimum": 0 },
+        "stMax": { "type": ["number", "null"], "minimum": 0 },
+        "suMin": { "type": ["number", "null"], "minimum": 0 },
+        "suMax": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "table": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "Optional lossy runtime representation. Values are flattened as index = (snIndex * stCount + stIndex) * suCount + suIndex. Outside the node box the nearest edge value is used and OUT_OF_DOMAIN is reported.",
+      "required": ["snNodes", "stNodes", "suNodes", "enValues", "muValues", "betaValues"],
+      "properties": {
+        "snNodes": { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 2 },
+        "stNodes": { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 2 },
+        "suNodes": { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 2 },
+        "enValues": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "muValues": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+        "betaValues": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+      }
+    },
+    "evidence": { "enum": ["MEASURED_RAW", "PUBLISHED_MEASUREMENT", "DIGITIZED_MEASUREMENT", "NORMATIVE_CONSTRAINT", "SYNTHETIC", "ASSUMED_PRIOR"] },
+    "calibrationStatus": { "enum": ["UNCALIBRATED", "FITTED_SYNTHETIC_ONLY", "CALIBRATED_IN_DOMAIN", "MODEL_INADEQUATE", "DATA_INSUFFICIENT"] },
+    "validationStatus": { "enum": ["NOT_RUN", "PASS_IN_DOMAIN", "FAIL", "MODEL_INADEQUATE", "NOT_OBSERVED"] },
+    "release": { "enum": ["BLOCKED", "DEV_ONLY", "APPROVED"] },
+    "sourceDatasetHash": { "type": "string" },
+    "calibrationRunId": { "type": "string" },
+    "notes": { "type": "string" },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["parameter", "status"],
+        "properties": {
+          "parameter": { "type": "string" },
+          "status": { "enum": ["IDENTIFIED", "LOWER_BOUND_ONLY", "UPPER_BOUND_ONLY", "AT_BOUNDARY", "NOT_IDENTIFIED", "FIXED"] },
+          "value": { "type": ["number", "null"] },
+          "standardError": { "type": ["number", "null"] },
+          "bootstrapLow": { "type": ["number", "null"] },
+          "bootstrapHigh": { "type": ["number", "null"] },
+          "atBoundary": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

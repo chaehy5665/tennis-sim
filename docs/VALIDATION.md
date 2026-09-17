@@ -78,7 +78,56 @@ TargetBackhand의 선택률 증가 및 Safe/Aggressive의 실제 속도 차이�
 - UNITY_RUNTIME_VERIFIED=false. Unity 컴파일/실행, 애니메이션/라켓/발 접촉은 검증하지 않았다.
 - REALISM_CALIBRATED=false. 긴 랠리, 프리셋 강도 차이, 낮은 타점의 공격 후보 탈락률과 계수는 실측 보정 전이다.
 - 접촉은 고정 tick 끝에서 검사하며 네트/바운드만 sub-tick 계산한다. 몸은 네트 방향 고정, 준비와 이동을 병행하는 단순 모델이다.
-- 플랫폼 간 부동소수점 일치, 중간 저장/재개, 3D 재생 보간은 미검증/미구현.
+- 플랫폼 간 bitwise 일치는 seed 42에서 실패했다. 같은 run의 outcome과 허용오차 기반 semantic 비교는 통과했지만 다른 seed/플랫폼으로 일반화하지 않는다. 세부 계약과 수치는 [DETERMINISM.md](DETERMINISM.md)를 따른다.
+- 중간 저장/재개와 3D 재생 보간은 미검증/미구현.
 - 발리/스매시/드롭샷/복식/다세트/풋폴트 및 신체·라켓 접촉 예외 규칙은 생략했다.
 
 다음 최소 단계는 동일 출력의 단순 3D 코트·캡슐·공 표시로 이동/타격 타이밍을 시각적으로 검증하는 것이다.
+
+
+## 공-표면 충돌 모델 검증 (2026-09-15 추가)
+
+이 절의 수치는 이 실행에서 얻은 결과이며, 실측 보정이 아니다. 명령과 환경: Linux x64, SDK 10.0.401,
+저장소 루트에서 실행. 큰 파일은 artifacts/에 생성했다.
+
+### 빌드와 자동 검증
+
+- dotnet build TennisSim.sln: 성공, warning 0 / error 0.
+- dotnet run --project tests/TennisSim.Tests --no-build: 57 passed, 0 failed (기존 36 + 충돌 모델/보정 도구 21).
+- dotnet run --project src/TennisSim.Cli --no-build -- scenarios: 44 PASS, 1 FAIL. 실패 항목은 이전
+  실행에서 이미 보존된 drop.defaultDragReference(기본 항력 낙하 참조 하한)이며 새 결함이 아니다.
+- 문서 fixture 4종(슬라이딩/미끄럼 0/접선 반발/과도 탑스핀)은 엔진 좌표로 독립 재계산한 값과 1e-9 이내로 일치.
+- 1200 조합 스윕에서 에너지 비증가, 마찰 상한, 각충격량 관계, 법선축 회전 불변, 표면 배치 불변 모두 위반 0.
+
+### 통합과 재현성
+
+- match --seed 42 --surface-model impulse: Completed, 28포인트, 이벤트 2289, resimulate --chunk 137 동일.
+- 같은 seed의 기존 모델: Completed, 27포인트, 이벤트 2309. 물리 버전이 다르므로 결과 일치를 요구하지 않는다.
+- 기존 경로 수치 동일성: 새 엔진의 seed-42 legacy 재생은 보존된 mvp-2 candidate 재생과
+  585057 leaf 중 수치 차이 0, 비수치 차이 0(엔진 태그 문자열만 다름).
+- points --count 200: 기존 모델 200/200 완료·실패 0(타격 4364), 충돌 모델 200/200 완료·실패 0(타격 3994).
+- 낮은 에너지 접촉은 SETTLED로 표면에 정지하며 스텝당 접촉 상한(12)은 진단 경로로 남아 있다.
+- tests/TennisSim.ViewerChecks: 원본 v1 fixture 14/14, v3 legacy 재생 14/14, v3 impulse 재생 14/14.
+- 수신자 예측(PredictContact)과 실제 비행은 같은 환경을 사용하며, 위치·시각이 스텝 단위로 일치한다.
+
+### 보정 파이프라인(합성 자료)
+
+- validate-data: EMPIRICAL_DATA MISSING(실측 레코드 0), 합성 레코드 240, 12 세션, 학습 160/검증 40/시험 40.
+- fit(합성, 진리 en=0.83, mu=0.35): M1 선택(en=0.8289, mu=0.3503, 두 파라미터 모두 IDENTIFIED,
+  두 접촉 모드가 모두 자료에 존재), M2는 사전 등록된 3% 검증 개선 기준을 넘지 못해 제외.
+  en의 세션 클러스터 부트스트랩 SE 0.0037; mu는 부트스트랩이 움직이지 않아 NOT_AVAILABLE로 표기했다.
+  같은 진리의 두 번째 합성 자료(seed 777001)는 en=0.8268, mu=0.3497로 실현 간 차이 2.1e-3 / 5.8e-4.
+- evaluate: 시험 집합 normal 0.1325 m/s, tangential 0.2167 m/s, angular 135.0 rpm, 출사각 1.083도.
+  합성 자료이므로 사전 등록 목표는 게이트하지 않고 서술값으로만 보고한다.
+- virtual-itf: 합성 M1 프로필에서 e_test=0.8289, mu_test=0.3503, raw CPR=62.1335. 상수 프로필에서는
+  프로필 상수를 재현하는 코드 경로 확인이며 실측 정보가 아니다. 합성 증거이므로 종료 코드 1.
+- compare-runtime: 상태 의존 예제 프로필에서 729 probe 최대 편차 en 0.0034, mu 상대 1.79%,
+  속도 0.0392 m/s로 사전 등록 허용오차(en 0.02, mu 5%) 이내. 조회표는 근사 표현이며 분석적 평가기와
+  일치한다는 것이 비트 단위 재현성 주장은 아니다.
+
+### 남은 한계
+
+- 실측 충돌 자료가 없어 경험적 보정과 코트 분류, 온도·마모 효과는 검증되지 않았다.
+- 스핀 출구 관측은 160 학습 레코드 중 69, 40 시험 레코드 중 18로 부분 관측이며 완전한 3D 스핀 검증이 아니다.
+- Unity Editor/EditMode/PlayMode와 후보 화면 검토는 이 호스트에서 실행하지 않았다(NOT_RUN).
+- v3의 플랫폼 간 실행은 NOT_TESTED다. mvp-2의 Linux/Mac 비교 결과는 v3로 이전되지 않는다.

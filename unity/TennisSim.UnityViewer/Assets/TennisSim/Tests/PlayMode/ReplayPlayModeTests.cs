@@ -9,12 +9,22 @@ namespace TennisSim.Viewer.Tests
     public sealed class ReplayPlayModeTests
     {
         [UnityTest]
-        public IEnumerator RealSceneWholeReplayAndControls()
+        public IEnumerator RealSceneWholeReplayAndControls() { return VerifyReplay(null); }
+        [UnityTest]
+        public IEnumerator CandidateWholeReplayAndControls()
+        {
+            string path = System.Environment.GetEnvironmentVariable("TENNISSIM_CANDIDATE_REPLAY");
+            if (string.IsNullOrEmpty(path)) Assert.Ignore("Set TENNISSIM_CANDIDATE_REPLAY to test candidate; NOT_RUN");
+            return VerifyReplay(path);
+        }
+        private IEnumerator VerifyReplay(string candidatePath)
         {
             yield return SceneManager.LoadSceneAsync("Replay", LoadSceneMode.Single);
             yield return null;
             var viewers = Object.FindObjectsOfType<ReplayPresenter>(); Assert.That(viewers.Length, Is.EqualTo(1));
-            var viewer = viewers[0]; Assert.That(viewer.Error, Is.Empty); Assert.That(viewer.Controller, Is.Not.Null);
+            var viewer = viewers[0];
+            if (candidatePath != null) viewer.Load(candidatePath);
+            Assert.That(viewer.Error, Is.Empty); Assert.That(viewer.Controller, Is.Not.Null);
             Assert.That(GameObject.Find("Court"), Is.Not.Null); Assert.That(GameObject.Find("Net"), Is.Not.Null);
             Assert.That(GameObject.Find("ReplayCamera").GetComponent<Camera>(), Is.Not.Null);
             Assert.That(GameObject.Find("ReplayLight").GetComponent<Light>(), Is.Not.Null);
@@ -23,6 +33,12 @@ namespace TennisSim.Viewer.Tests
             foreach (var collider in viewer.GetComponentsInChildren<Collider>()) Assert.That(collider.enabled, Is.False);
             Assert.That(viewer.GetComponentsInChildren<Rigidbody>().Length, Is.Zero);
             var c = viewer.Controller;
+            if (candidatePath == null)
+            {
+                Assert.That(c.Timeline.Data.FinalScore.PointsPlayed, Is.EqualTo(27));
+                Assert.That(c.Timeline.Data.FinalScore.Winner, Is.EqualTo(1));
+                Assert.That(c.Timeline.Data.FinalScore.Games, Is.EqualTo(new[] { 0, 6 }));
+            }
             c.Restart(); var initial = viewer.Ball.position; c.SetPlaying(true);
             yield return null; Assert.That(c.Time, Is.GreaterThan(0));
             c.SetPlaying(false); double paused = c.Time; yield return null; Assert.That(c.Time, Is.EqualTo(paused));
@@ -40,8 +56,8 @@ namespace TennisSim.Viewer.Tests
                 Assert.That(Vector3.Distance(viewer.PlayerA.position - Vector3.up * .9f, ReplayPresenter.Map(s.A)), Is.LessThan(1e-6f));
                 if (++frames % 1000 == 0) yield return null;
             }
-            Assert.That(events, Is.EqualTo(c.Timeline.Data.Events.Length)); Assert.That(c.State.Score.PointsPlayed, Is.EqualTo(27));
-            Assert.That(c.State.Score.Winner, Is.EqualTo(1)); Assert.That(c.State.Score.Games, Is.EqualTo(new[] { 0, 6 }));
+            Assert.That(events, Is.EqualTo(c.Timeline.Data.Events.Length)); Assert.That(c.State.Score.PointsPlayed, Is.EqualTo(c.Timeline.Data.FinalScore.PointsPlayed));
+            Assert.That(c.State.Score.Winner, Is.EqualTo(c.Timeline.Data.FinalScore.Winner)); Assert.That(c.State.Score.Games, Is.EqualTo(c.Timeline.Data.FinalScore.Games));
             foreach (var e in c.Timeline.Data.Events)
             {
                 if (!e.IsMarker) continue;
@@ -54,7 +70,7 @@ namespace TennisSim.Viewer.Tests
             c.Seek(200); c.Seek(100); viewer.Present(); Assert.That(viewer.Ball.position, Is.EqualTo(expected));
             c.Restart(); viewer.Present(); Assert.That(c.Time, Is.Zero); Assert.That(viewer.MarkerEvent, Is.Null);
             LogAssert.NoUnexpectedReceived();
-            Debug.Log("TENNISSIM_FULL_REPLAY_VERIFIED points=27 events=" + events + " file=" + c.Timeline.Data.FileName);
+            Debug.Log("TENNISSIM_FULL_REPLAY_VERIFIED points=" + c.Timeline.Data.FinalScore.PointsPlayed + " events=" + events + " file=" + c.Timeline.Data.FileName);
         }
     }
 }

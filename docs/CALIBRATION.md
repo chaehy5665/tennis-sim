@@ -36,7 +36,7 @@ The held-out set is evaluated after the one fixed corner correction; it is not u
 | Independent points | 1000 complete / 0 failures / 22256 shots | same |
 | Tactical comparison, 5 seeds × 4 policies | 20 completed | same; wins A 3/5, 5/5, 0/5, 1/5 |
 
-Improved: exact corner geometry under the finite circular-footprint assumption. Unchanged: ordinary match metrics and the conditional drop mismatch. Worsened: none observed in executed paired summaries. Unmeasured: empirical athlete fit, actual contact patch, high-frequency movement peaks, real racket collision, cross-platform numerical reproducibility and candidate visual naturalness. This sparse match sample does not demonstrate the corner error's frequency in real tennis.
+Improved: exact corner geometry under the finite circular-footprint assumption. Unchanged: ordinary match metrics and the conditional drop mismatch. Worsened: none observed in executed paired summaries. Unmeasured: empirical athlete fit, actual contact patch, high-frequency movement peaks, real racket collision and candidate visual naturalness. Cross-platform evidence is limited to the later seed 42 Linux/Mac comparison; broader seed/platform generalization is unmeasured. This sparse match sample does not demonstrate the corner error's frequency in real tennis.
 
 The correction is reproduced with `scenarios`, not by pretending seed 42 contains a corner failure. A fixed corner has no match point/event/seek coordinate; this is explicitly NOT_APPLICABLE. Representative seed 42 replay contact/bounce anchors below verify display and observation, not a fabricated visual manifestation of the fixed corner.
 
@@ -96,6 +96,12 @@ In the existing HUD, load `audit-baseline-42.json` and `audit-candidate-42.json`
 
 Candidate EditMode/PlayMode, full playback/controls, matching final score and human screen assessment must be recorded as a **new** result. Remaining order: native Mac source/settings check → hash-verified replay preparation → Editor compile/EditMode/PlayMode → screen review → native Mac resimulation comparison.
 
+## Cross-platform seed 42 result
+
+The Linux candidate was copied with its expected SHA-256 and resimulated on Mac from the preserved `tennissim-mvp-2` candidate source. The returned Mac replay has SHA-256 `9c947f201228d9700d98f8f1d1f8e301b8a5b57829ba98819f7d35abae485690`; it is not byte-identical to the Linux hash `fcc0c8e0db7c3618789e0ab10300a0c611d6feb1565b130640d5ab21c9ca2958`, and the CLI reported `RESIMULATION_IDENTICAL=false`.
+
+Direct tree comparison found exact input, event skeleton/order, final RNG state and terminal B 6–0 after 27 points. All 117,610 differing leaves are numeric; there are zero non-numeric leaf differences. The maximum absolute numeric delta is `6.944999436653276e-10`. The first difference is event sequence 39 `BallBounced`, immediately after an exact event 38, on the `Math.Exp`-using collision path. Platform math is the likely cause but remains an inference without a runtime-level trace. The single-run semantic result passes the tolerances in [DETERMINISM.md](DETERMINISM.md); bitwise reproducibility fails. Mac SDK/runtime, project hashes and full source-hash verification were not retained with this run, so build identity evidence is partial.
+
 ## Final paired results and status
 
 All **320 final-batch matches** completed (160 matched before/after pairs). All 160 pairs have identical match/metric/check summaries, with zero measured match invariant failures. For the held-out 80 pairs, the runner additionally recorded hashes normalized only for the engine-version string: **80/80 identical**. Development full-record normalized hashes were not collected for all rows; only their summaries and retained representative records are compared. Seed42 normalized bytes are independently identical. No uncollected development hash check is claimed.
@@ -114,7 +120,7 @@ MEASUREMENT_COVERAGE: observed impulses/contacts; sampled movement/apex/net; ins
 PHYSICS_SCENARIO_RESULT: correctness PASS; conditional default-drag reference below range
 MOVEMENT_SCENARIO_RESULT: PASS for executed internal-limit and reach scenarios
 DETERMINISM_RESULT: PASS on Linux; observation unchanged; repeated candidate bytes identical
-CROSS_PLATFORM_REPRODUCIBILITY: NOT_RUN
+CROSS_PLATFORM_REPRODUCIBILITY: seed42 outcome PASS; semantic PASS_WITH_TOLERANCE; bitwise FAIL; broader generalization NOT_ESTABLISHED
 REGRESSION_RESULT: PASS; Core36/36, shared14/14 each, 1000 points each, 20 tactical matches each
 ISSUES_CONFIRMED: circular-footprint corner false-IN correctness bug; separate conditional drop reference gap
 ISSUES_FIXED: 1 kind, 8/8 fixed corner cases corrected
@@ -126,6 +132,6 @@ UNITY_CANDIDATE_TEST_RESULT: shared-data PASS14/14; actual Editor/EditMode/PlayM
 UNITY_CANDIDATE_VISUAL_VERIFIED: false
 REALISM_CALIBRATED: false
 EVIDENCE_FILES: artifacts/calibration/20260914-audit/{manifest,baseline-summary,candidate-summary,comparison,issues}.json; metrics.csv; replays/; logs/; source snapshots
-KNOWN_LIMITATIONS: unspecified surface/population, sparse sampling, simplified finite footprint/net, no Mac execution
-NEXT_SMALLEST_STEP: native Mac settings check, replay preparation, Unity tests and visual review, native resimulation
+KNOWN_LIMITATIONS: unspecified surface/population, sparse sampling, simplified finite footprint/net, single cross-platform seed and partial Mac build-identity evidence
+NEXT_SMALLEST_STEP: retain Mac SDK/project/source identity; add a reusable semantic replay comparator; expand the OS/architecture/seed matrix
 ```

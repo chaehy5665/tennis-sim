@@ -12,7 +12,7 @@ namespace TennisSim.Viewer
         {
             var root = Obj(StrictJson.Parse(json));
             if (Text(root, "schemaVersion") != "1.0") throw new FormatException("Unsupported replay schemaVersion; expected 1.0");
-            if (Text(root, "engineVersion") != "tennissim-mvp-1") throw new FormatException("Unsupported engineVersion / coordinate contract");
+            if (Text(root, "engineVersion") != "tennissim-mvp-1" && Text(root, "engineVersion") != "tennissim-mvp-2" && Text(root, "engineVersion") != "tennissim-mvp-3") throw new FormatException("Unsupported engineVersion / coordinate contract");
             var input = Obj(Get(root, "input"));
             double seed = Number(input, "seed");
             if (seed < 0 || seed > uint.MaxValue || seed != Math.Truncate(seed)) throw new FormatException("Invalid seed");

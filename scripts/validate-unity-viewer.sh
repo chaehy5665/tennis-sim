@@ -4,6 +4,7 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 project="$root/unity/TennisSim.UnityViewer"
 mode="${1:-all}"
 case "$mode" in prepare|compile|EditMode|PlayMode|all) ;; *) echo 'Usage: validate-unity-viewer.sh prepare|compile|EditMode|PlayMode|all' >&2; exit 2;; esac
+command -v python3 >/dev/null || { echo "ERROR: Python 3 is required." >&2; exit 2; }
 mkdir -p "$root/artifacts/unity-validation"
 output="$(mktemp -d "$root/artifacts/unity-validation/editor-$(date -u +%Y%m%dT%H%M%S)-XXXXXX")"
 printf 'EVIDENCE=%s\n' "$output"
@@ -54,10 +55,10 @@ print('TEST_FRAMEWORK_REQUESTED='+p['dependencies']['com.unity.test-framework'])
 PY
 [[ "$mode" != prepare ]] || exit 0
 [[ -f "$project/Assets/StreamingAssets/Replays/sample-42.json" ]] || { echo 'ERROR: Run prepare-unity-replay.sh first.' >&2; exit 2; }
-sha256sum "$project/Assets/StreamingAssets/Replays/sample-42.json" > "$output/replay.sha256"
+python3 -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]); print(hashlib.sha256(p.read_bytes()).hexdigest(),p)' "$project/Assets/StreamingAssets/Replays/sample-42.json" > "$output/replay.sha256"
 if [[ "$mode" == compile || "$mode" == all ]]; then
   run_editor compile -batchmode -nographics -quit -projectPath "$project" -executeMethod TennisSim.Viewer.Editor.ReplaySceneSetup.Setup
-  rg -q 'TENNISSIM_SCENE_READY' "$output/compile.log" || { echo 'ERROR: Scene setup/compilation completion marker missing' >&2; exit 1; }
+  python3 -c 'import pathlib,sys; sys.exit(0 if "TENNISSIM_SCENE_READY" in pathlib.Path(sys.argv[1]).read_text() else 1)' "$output/compile.log" || { echo 'ERROR: Scene setup/compilation completion marker missing' >&2; exit 1; }
   [[ "$mode" != compile ]] || exit 0
 fi
 for platform in EditMode PlayMode; do

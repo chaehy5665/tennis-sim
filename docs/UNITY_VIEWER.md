@@ -87,3 +87,11 @@ Editor Game 창을 충분히 넓게 열고 코트 방향, A/B 끝 위치, 공 �
 - 프리미티브·IMGUI·카메라 구도 및 Unity API 호환은 실제 Editor 검증이 남아 있다. 입력에 없는 라켓/애니메이션/물리 상태는 생성하지 않는다.
 
 구현 시 참고한 공식 명령 계약: [Editor command line](https://docs.unity3d.com/6000.0/Documentation/Manual/EditorCommandLineArguments.html), [Test Framework command line](https://docs.unity3d.com/Packages/com.unity.test-framework@1.4/manual/reference-command-line.html). 이는 설치/실행 또는 특정 버전 조합 검증의 증거가 아니다.
+
+## Calibration candidate verification (2026-09-14)
+
+The current Linux checkout has no ProjectSettings/Packages from the reported Mac run. Reported 6000.6.0f1 and Test Framework request 1.8.0 are **not verified current files** here; resolved package version is UNKNOWN. Do not regenerate or upgrade existing Mac settings to match this Linux scaffold.
+
+`prepare-unity-replay.sh INPUT OPTIONAL_NEW_FILENAME.json` now supports named audit copies via the complete shared-data checks (`--general`), and refuses to replace an existing different file. Omitted filename retains the original seed-42 golden fixture checks. Python 3 replaces platform-specific hash/path/grep commands; SDK lookup uses DOTNET then PATH, with Linux-only local SDK fallback.
+
+The existing fixture tests remain. Additional Unity candidate tests require `TENNISSIM_CANDIDATE_REPLAY` pointing to the actual candidate; if missing they report skipped/NOT_RUN, never passed candidate verification. A .NET shared-data pass does not replace EditMode/PlayMode or visual review. See [CALIBRATION.md](CALIBRATION.md) for exact files, hashes and Mac commands.

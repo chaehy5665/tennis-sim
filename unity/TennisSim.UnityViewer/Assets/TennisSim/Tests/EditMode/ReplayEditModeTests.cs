@@ -15,6 +15,13 @@ namespace TennisSim.Viewer.Tests
             });
         }
         [Test]
+        public void CandidateDataContract()
+        {
+            string path = System.Environment.GetEnvironmentVariable("TENNISSIM_CANDIDATE_REPLAY");
+            if (string.IsNullOrEmpty(path)) Assert.Ignore("Set TENNISSIM_CANDIDATE_REPLAY to test candidate; NOT_RUN");
+            ReplayChecks.Run(File.ReadAllText(path), (name, test) => Assert.DoesNotThrow(() => test(), name), false);
+        }
+        [Test]
         public void SceneSetupIsRepeatableAndConnected()
         {
             ReplaySceneSetup.Setup(); ReplaySceneSetup.Setup();

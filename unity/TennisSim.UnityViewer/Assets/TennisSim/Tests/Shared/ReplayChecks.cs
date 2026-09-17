@@ -12,19 +12,31 @@ namespace TennisSim.Viewer.Tests
         static void Same(ReplayState a, ReplayState b) { Near(a.Ball, b.Ball); Near(a.A, b.A); Near(a.B, b.B); Check(a.Point == b.Point && a.Score.Display == b.Score.Display, "Point/score mismatch"); }
         static void Reject(Action action) { try { action(); } catch (FormatException) { return; } throw new Exception("Expected explicit FormatException"); }
         static string ReplaceFirst(string text, string from, string to) { int index = text.IndexOf(from, StringComparison.Ordinal); Check(index >= 0, "Missing fixture token " + from); return text.Substring(0, index) + to + text.Substring(index + from.Length); }
-        public static void Run(string json, Action<string, Action> test)
+        public static void Run(string json, Action<string, Action> test, bool baselineFixture = true)
         {
             var d = ReplayLoader.Parse(json); var timeline = new ReplayTimeline(d); var sampler = new ReplayStateSampler(timeline);
-            test("Actual seed-42 sample and terminal result", () => { Check(d.Seed == 42 && d.Events.Length == 2309 && d.Frames.Length == 6118); Check(timeline.TotalPoints == 27 && d.FinalScore.Winner == 1 && d.FinalScore.Games.SequenceEqual(new[] { 0, 6 })); });
-            test("Unsupported schema and engine", () => { Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"schemaVersion\":\"1.0\"", "\"schemaVersion\":\"9\""))); Reject(() => ReplayLoader.Parse(json.Replace("tennissim-mvp-1", "unknown"))); });
+            if (baselineFixture) test("Actual seed-42 sample and terminal result", () => { Check(d.Seed == 42 && d.Events.Length == 2309 && d.Frames.Length == 6118); Check(timeline.TotalPoints == 27 && d.FinalScore.Winner == 1 && d.FinalScore.Games.SequenceEqual(new[] { 0, 6 })); });
+            else test("Replay terminal result and full point count", () => { Check(timeline.TotalPoints == d.FinalScore.PointsPlayed); Same(sampler.Sample(timeline.Duration), d.Frames.Last()); });
+            test("Unsupported schema and engine", () => { Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"schemaVersion\":\"1.0\"", "\"schemaVersion\":\"9\""))); Reject(() => ReplayLoader.Parse(json.Replace(d.EngineVersion, "unknown"))); });
             test("Required fields never default to zero", () => {
                 foreach (var key in new[] { "seed", "time", "x", "y", "z", "point", "players", "ball", "before", "display", "games", "complete", "winner", "sequence", "frames", "finalScore", "config" })
+                {
+                    // A replay carrying a surface environment also has input.surface.ball, so the state
+                    // field is anchored inside the recorded event stream instead of the first match.
+                    if (key == "ball")
+                    {
+                        int events = json.IndexOf("\"events\":[", StringComparison.Ordinal); Check(events >= 0, "Missing events array");
+                        string prefix = json.Substring(0, events); string tail = json.Substring(events);
+                        Reject(() => ReplayLoader.Parse(prefix + ReplaceFirst(tail, "\"ball\":", "\"missing_ball\":")));
+                        continue;
+                    }
                     Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"" + key + "\":", "\"missing_" + key + "\":")));
+                }
             });
             test("Malformed JSON, overflow, duplicate keys and wrong types", () => {
                 Reject(() => ReplayLoader.Parse(json + "garbage")); Reject(() => ReplayLoader.Parse(json.Substring(0, json.Length - 4)));
-                foreach (var value in new[] { "1e999", "NaN", "null", "true", "\"0\"", "01", "-1", "0.5" }) Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"seed\":42", "\"seed\":" + value)));
-                Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"seed\":42", "\"seed\":42,\"seed\":42")));
+                foreach (var value in new[] { "1e999", "NaN", "null", "true", "\"0\"", "01", "-1", "0.5" }) Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"seed\":" + d.Seed, "\"seed\":" + value)));
+                Reject(() => ReplayLoader.Parse(ReplaceFirst(json, "\"seed\":" + d.Seed, "\"seed\":" + d.Seed + ",\"seed\":" + d.Seed)));
             });
             test("Invalid time order, event sequence and nonfinite coordinates", () => {
                 var copy = ReplayLoader.Parse(json); copy.Frames[1].Time = -1; Reject(() => ReplayValidator.Validate(copy));

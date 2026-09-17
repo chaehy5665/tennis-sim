@@ -14,3 +14,7 @@ unity/TennisSim.UnityViewer/MemoryCaptures/
 unity/TennisSim.UnityViewer/.vs/
 unity/TennisSim.UnityViewer/*.csproj
 unity/TennisSim.UnityViewer/*.sln
+
+# Local calibration replay copies; original sample fixture stays tracked.
+unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/audit-*.json
+unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/audit-*.json.meta

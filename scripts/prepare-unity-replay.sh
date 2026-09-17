@@ -6,17 +6,30 @@ if [[ ! -f "$input" ]]; then
   echo "ERROR: Replay input not found: $input. Generate it with the existing CLI match command first." >&2
   exit 2
 fi
-input="$(realpath "$input")"
-destination="$root/unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/sample-42.json"
-dotnet="${DOTNET:-$root/.tools/dotnet/dotnet}"
+command -v python3 >/dev/null || { echo "ERROR: Python 3 is required." >&2; exit 2; }
+input="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$input")"
+name="${2:-sample-42.json}"
+[[ "$name" == *.json && "$name" != */* && "$name" != .* ]] || { echo "ERROR: destination must be a plain .json filename" >&2; exit 2; }
+destination="$root/unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/$name"
+dotnet="${DOTNET:-$(command -v dotnet || true)}"
+if [[ -z "$dotnet" && "$(uname -s)" == Linux ]]; then dotnet="$root/.tools/dotnet/dotnet"; fi
 command -v "$dotnet" >/dev/null || { echo 'ERROR: Set DOTNET to an installed dotnet executable.' >&2; exit 2; }
 cd "$root"
 "$dotnet" build tests/TennisSim.ViewerChecks --nologo
 # The bundled fixture is deliberately seed 42; arbitrary valid files can be loaded in the HUD.
-"$dotnet" run --project tests/TennisSim.ViewerChecks --no-build -- "$input"
+if [[ "$name" == sample-42.json ]]; then
+  "$dotnet" run --project tests/TennisSim.ViewerChecks --no-build -- "$input"
+else
+  "$dotnet" run --project tests/TennisSim.ViewerChecks --no-build -- "$input" --general
+fi
 mkdir -p "$(dirname "$destination")"
-if [[ "$input" != "$destination" ]]; then cp -- "$input" "$destination"; fi
-source_hash="$(sha256sum "$input" | cut -d ' ' -f 1)"
-copy_hash="$(sha256sum "$destination" | cut -d ' ' -f 1)"
-[[ "$source_hash" == "$copy_hash" ]] || { echo 'ERROR: Replay copy hash mismatch' >&2; exit 1; }
-printf 'REPLAY_INPUT=%s\nVIEWER_REPLAY_FILE=%s\nSHA256=%s\nHASH_IDENTICAL=true\n' "$input" "$destination" "$copy_hash"
+python3 - "$input" "$destination" <<'PYHASH'
+import hashlib,pathlib,shutil,sys
+source,dest=map(pathlib.Path,sys.argv[1:])
+hashof=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+if dest.exists() and hashof(source)!=hashof(dest):
+ sys.exit('ERROR: destination exists with different bytes; choose a new filename')
+if source!=dest and not dest.exists(): shutil.copyfile(source,dest)
+assert hashof(source)==hashof(dest)
+print('REPLAY_INPUT='+str(source)+'\nVIEWER_REPLAY_FILE='+str(dest)+'\nSHA256='+hashof(dest)+'\nHASH_IDENTICAL=true')
+PYHASH

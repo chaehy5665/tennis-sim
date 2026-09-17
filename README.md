@@ -126,3 +126,38 @@ Details: [integration-notes.md](integration-notes.md), [docs/BOUNCE_MODEL.md](do
 [docs/CALIBRATION_PIPELINE.md](docs/CALIBRATION_PIPELINE.md), [reports/model-card.md](reports/model-card.md),
 [reports/calibration-report.md](reports/calibration-report.md),
 [reports/reproducibility-report.md](reports/reproducibility-report.md).
+
+
+## Empirical validation with published measurements (2026-09-17)
+
+The calibration pipeline now runs on real published data. Cross 2002 (Am. J. Phys. 70, 482) reports tennis
+ball bounces with zero incident spin, measured rebound speed, rebound angle and rebound spin, on wood, emery
+paper and a Rebound Ace court surface. Seven records were extracted with a verified text-layer method and
+registered as PUBLISHED_MEASUREMENT, so the repository no longer reports EMPIRICAL_DATA: MISSING.
+
+    # extraction is reproducible and refuses a mismatched source PDF
+    python3 scripts/build-cross2002-records.py --pdf <downloaded AJP00482.pdf>
+
+    # published-measurement fit, chosen from the dataset subset in the manifest
+    dotnet run --project src/TennisSim.Calibration --no-build -- validate-data \
+      --dataset data/bounce/manifest.json --datasets cross2002-tennis-ball-surfaces
+    dotnet run --project src/TennisSim.Calibration --no-build -- fit \
+      --dataset data/bounce/manifest.json --datasets cross2002-tennis-ball-surfaces \
+      --config calibration/fit-config-cross2002.json --models M1,M1B --out artifacts/calibration/cross2002-run
+    dotnet run --project src/TennisSim.Calibration --no-build -- evaluate \
+      --run artifacts/calibration/cross2002-run --split validation --per-record
+
+Results: en = 0.8061 and beta_grip = 0.0495 on the emery training bounces, with mu_eff only upper bounded at
+0.6 because no low-speed bounce saturates the friction limit. The normal response reproduces the in-domain
+bounce to 0.011 m/s, but V1's rigid tangential coupling misses the measured spin by 95 rpm in-domain, and the
+observational residual of section 12.4 exceeds its uncertainty by about 3 sigma. Transfer to wood and Rebound
+Ace fails the 2 degree exit-angle target. No court is calibrated: the training surface is laboratory emery
+paper and the fitted domain ends at 2.6 m/s.
+
+    EMPIRICAL_DATA: LIMITED
+    EMPIRICAL_CALIBRATION: PASS_IN_DOMAIN (normal response, emery service, 2.1-2.4 m/s); transfer FAIL
+    SPIN_VALIDATION: FAIL_IN_DOMAIN
+    MODEL_ADEQUACY: UNDETERMINED (structural residual about 3 sigma in-domain)
+    PROFILE_RELEASE: BLOCKED
+
+Full detail: [reports/empirical-validation-cross2002.md](reports/empirical-validation-cross2002.md).

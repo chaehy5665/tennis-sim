@@ -18,3 +18,6 @@ Field groups:
 
 Changing a value changes a pre-registered decision, so it belongs in a new run with a new output directory:
 fit always writes hashes of the dataset, manifest, splits and exported profile into run.json.
+
+- fit-config-cross2002.json: configuration for the published-measurement dataset. No bootstrap (one independent
+  training group), a lower normal-approach floor for the low-speed bounces, and M1/M1B candidates.

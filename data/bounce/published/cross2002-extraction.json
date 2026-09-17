@@ -1,0 +1,95 @@
+{
+  "sourceId": "C2002",
+  "title": "Measurements of the horizontal coefficient of restitution for a superball and a tennis ball",
+  "author": "Rod Cross",
+  "journal": "American Journal of Physics 70(5), 482-489 (2002)",
+  "doi": "10.1119/1.1450571",
+  "url": "https://physics.umd.edu/courses/Phys405/Hill/Fall05/Information/AJP/AJP00482.pdf",
+  "pdfSha256": "b5cbf25b165491327335d997a418f4c2d242fc694ad077fdb22243e6309ad536",
+  "pdfHashStatus": "match",
+  "accessDate": "2026-09-17",
+  "recordCount": 7,
+  "recordFile": "cross2002-records.jsonl",
+  "recordFileSha256": "90d93f681a1e00a5de2aaeb32d5f68dde4ddbf7c36390a8275bab9e91920ab57",
+  "extractionMethod": "PDF text layer read directly; Table I and Table II values transcribed by hand after automated text extraction; derived columns recomputed and compared before writing",
+  "uncertaintyBasis": "Table I publishes per-component uncertainties; Table II publishes none, so 2 percent (methods statement for the horizontal component), 1.5 degrees (Table I angle uncertainty) and 1 percent (Table I spin precision) are applied and flagged per record",
+  "excludedColumns": "Table II trailing columns m, A and mS were read but not used; they are not part of the collision state contract",
+  "checks": [
+    {
+      "record": "wood-20deg",
+      "vx2_published": 2.92,
+      "vx2_recomputed": 2.918,
+      "ratio_published": 0.84,
+      "ratio_recomputed": 0.835,
+      "ey_published": 0.8,
+      "ey_recomputed": 0.799,
+      "omega2_times_paperRadius": 1.152
+    },
+    {
+      "record": "wood-45deg",
+      "vx2_published": 1.61,
+      "vx2_recomputed": 1.613,
+      "ratio_published": 0.6,
+      "ratio_recomputed": 0.6,
+      "ey_published": 0.73,
+      "ey_recomputed": 0.725,
+      "omega2_times_paperRadius": 1.921
+    },
+    {
+      "record": "emery-20deg",
+      "vx2_published": 1.99,
+      "vx2_recomputed": 1.992,
+      "ratio_published": 0.6,
+      "ratio_recomputed": 0.601,
+      "ey_published": 0.84,
+      "ey_recomputed": 0.848,
+      "omega2_times_paperRadius": 2.591
+    },
+    {
+      "record": "emery-45deg",
+      "vx2_published": 1.66,
+      "vx2_recomputed": 1.663,
+      "ratio_published": 0.63,
+      "ratio_recomputed": 0.636,
+      "ey_published": 0.79,
+      "ey_recomputed": 0.793,
+      "omega2_times_paperRadius": 1.647
+    },
+    {
+      "record": "rebound-ace-20deg",
+      "vx2_published": 1.96,
+      "vx2_recomputed": 1.955,
+      "ratio_published": 0.62,
+      "ratio_recomputed": 0.621,
+      "ey_published": 0.74,
+      "ey_recomputed": 0.738,
+      "omega2_times_paperRadius": 2.531
+    },
+    {
+      "record": "rebound-ace-45deg",
+      "vx2_published": 1.74,
+      "vx2_recomputed": 1.735,
+      "ratio_published": 0.68,
+      "ratio_recomputed": 0.681,
+      "ey_published": 0.79,
+      "ey_recomputed": 0.792,
+      "omega2_times_paperRadius": 1.67
+    },
+    {
+      "record": "emery-20deg-25cm",
+      "v1_from_published_components": 2.237,
+      "v1_published": 2.24,
+      "theta1_from_components_deg": 20.14,
+      "theta2_from_components_deg": 26.38,
+      "theta2_published_deg": 26.2,
+      "R_omega2_over_vx2": 1.406,
+      "R_omega2_over_vx2_published": 1.41
+    }
+  ],
+  "limits": [
+    "single typical bounce per surface and angle, not an average of repeated bounces",
+    "incident speed range 2.24 to 3.80 m/s only: far below serve and rally speeds",
+    "surfaces are laboratory wood, emery paper and a Rebound Ace court sample, not classified courts",
+    "contact position is not measured in any record"
+  ]
+}

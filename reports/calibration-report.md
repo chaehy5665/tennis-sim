@@ -90,3 +90,21 @@ Acquire one measured ball-surface combination across incidence conditions (10/20
 0 and +/- 1500 and 3000 rpm), record it with the schema in schemas/bounce-record.schema.json, fix the split
 assignment by session, then run validate-data, fit, evaluate and virtual-itf. Until then every profile in this
 repository stays UNCALIBRATED or FITTED_SYNTHETIC_ONLY, and RELEASE stays BLOCKED or DEV_ONLY.
+
+
+## Update 2026-09-17 - measured evidence and joint model selection
+
+- The manifest now also registers published measurements (source C2002, dataset cross2002-tennis-ball-surfaces,
+  7 records) beside the labelled synthetic dataset. fit, validate-data and evaluate accept a
+  --datasets id,id filter so a run can restrict itself to one dataset; the dataset hash then covers exactly
+  that subset and evaluate refuses to reuse a different one.
+- The synthetic run in this report was refreshed with the current code and the subset filter. Parameters, losses
+  and metrics are unchanged (en 0.828921, mu_eff 0.350284, M1 selected over M2); the exported profile hash is
+  now ffac7dbbc8f06cfd73a56b6fd882fd237306d60f10d416c077d5b38bd07494fc because the dataset subset is part of
+  the hashed content. The earlier hash 996ccc731162bd99f2e56f103d4506c3a0db5fc04e4cac93076ae4124dc4cbf3 belongs
+  to the same run before the subset filter existed.
+- Model selection now compares the joint normalised residual (normal, tangential and angular together) instead
+  of the normal component alone, and a new candidate M1B (constant en, constant mu, constant beta) can express
+  a tangential restitution. The M1/M2 selection for the synthetic dataset is unchanged.
+- Empirical results and their limits are in reports/empirical-validation-cross2002.md. They do not change any
+  statement in this report: the synthetic fit remains software verification only.

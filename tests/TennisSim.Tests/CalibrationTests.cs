@@ -29,17 +29,20 @@ public static class CalibrationTests
     {
         var tolerances = new BounceTolerances();
 
-        test("Calibration: repository dataset validates and carries no measured evidence", () =>
+        test("Calibration: synthetic dataset stays synthetic and measured records stay published", () =>
         {
             var dataset = LoadRepositoryDataset();
             Check(dataset.Records.Count > 0, "Expected the labelled synthetic dataset");
-            Check(dataset.MeasuredRecords == 0, "This repository must not claim measured bounce records");
-            Check(dataset.SyntheticRecords == dataset.Records.Count);
+            var synthetic = BounceDataset.Load(Path.Combine(Root(), "data", "bounce", "manifest.json"), new[] { "synthetic-type2-flat" });
+            Check(synthetic.SyntheticRecords == synthetic.Records.Count && synthetic.MeasuredRecords == 0, "The synthetic dataset must never contain measured evidence");
+            Check(dataset.MeasuredRecords == 7, "Only the published Cross 2002 records count as measured");
+            Check(dataset.Records.Where(r => r.EvidenceType != EvidenceType.SYNTHETIC).All(r => r.SourceId == "C2002"), "Measured records must come from the registered published source");
             Check(dataset.Splits.Values.Distinct().Count() >= 2, "Splits must be assigned per group");
             Check(dataset.Split("test").All(r => dataset.SplitOf(r) == "test"));
             Check(dataset.Split("train").Count() > dataset.Split("test").Count());
-            foreach (var record in dataset.Records) Check(record.EvidenceType == EvidenceType.SYNTHETIC, "Evidence relabelled");
-            Check(dataset.Records.Count(r => !r.UsableForTangential) > 0, "Expected records whose incident spin is unmeasured");
+            foreach (var record in synthetic.Records) Check(record.EvidenceType == EvidenceType.SYNTHETIC, "Evidence relabelled");
+            Check(synthetic.Records.Count(r => !r.Observed.AngularVelocityBeforeMeasured) > 0, "Expected synthetic records whose incident spin is unmeasured");
+            Check(synthetic.Records.Any(r => !r.Observed.PositionMeasured) == false, "Synthetic records carry a measured contact position");
         });
 
         test("Calibration: shipped design profile matches the built-in one", () =>
@@ -160,6 +163,54 @@ public static class CalibrationTests
             Check(temperature.E23 < fastResult.E23, "e_23 temperature correction direction");
         });
 
+        test("Calibration: published bounce measurements load as measured evidence", () =>
+        {
+            var dataset = BounceDataset.Load(Path.Combine(Root(), "data", "bounce", "manifest.json"), new[] { "cross2002-tennis-ball-surfaces" });
+            Check(dataset.Records.Count == 7, "expected 7 published records");
+            Check(dataset.MeasuredRecords == 7 && dataset.SyntheticRecords == 0, "published records must stay measured evidence");
+            Check(dataset.Records.All(r => r.EvidenceType == EvidenceType.PUBLISHED_MEASUREMENT));
+            Check(dataset.Records.All(r => r.UsableForTangential && r.UsableForAngular), "zero incident spin is an experimental condition, so the tangential response is usable");
+            Check(dataset.Records.All(r => !r.Observed.PositionMeasured) && dataset.Records.All(r => r.Observed.NormalMeasured), "published flat-contact records state the normal, not a court position");
+            Check(dataset.Records.All(r => r.Observed.AngularVelocityBeforeMeasured), "incident spin is zero by construction and declared as such");
+            Check(dataset.Split("train").Count() == 2 && dataset.Split("validation").Count() == 1 && dataset.Split("test").Count() == 4, "split assignment must stay fixed");
+            Check(dataset.Split("test").All(r => r.SurfaceId != dataset.Split("train").First().SurfaceId), "held-out records are different surfaces, never merged into one profile");
+            string notePath = Path.Combine(Root(), "data", "bounce", "published", "cross2002-extraction.json");
+            Check(File.Exists(notePath), "missing extraction note");
+            var note = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(notePath))!;
+            Check(note["recordCount"]!.GetValue<int>() == 7, "extraction note record count");
+            Check(note["checks"]!.AsArray().Count == 7, "every record must carry a derived-column check");
+            Check(Published().Count == 7);
+        });
+
+        test("Calibration: published fit returns a measured profile with bounded friction", () =>
+        {
+            var dataset = BounceDataset.Load(Path.Combine(Root(), "data", "bounce", "manifest.json"), new[] { "cross2002-tennis-ball-surfaces" });
+            var config = new FitConfig { Model = "M1B", BootstrapResamples = 0, InitialStep = 0.1, StopStep = 1e-7 };
+            var estimation = Fit.Run("M1B", dataset, config, tolerances, estimateBeta: true);
+            Near(estimation.Parameters[0], 0.806, 0.02, "en on emery");
+            Check(estimation.Parameters[2] > 0, "a tangential restitution term must be able to move away from zero on this data");
+            Check(estimation.Fits.Any(f => f.Name == "mu_eff" && f.Status == "UPPER_BOUND_ONLY"), "friction never saturates in these bounces, so mu is only upper bounded");
+            Check(estimation.LimitModes.ContainsKey(nameof(ActiveImpulseLimit.TANGENTIAL_TARGET_LIMITED)));
+            var run = new FitRun { RunId = "unit-published", DatasetHash = dataset.DatasetHash, Model = "M1B" };
+            var profile = ProfileExport.Build(estimation, run, EvidenceType.PUBLISHED_MEASUREMENT, ValidationStatus.PASS_IN_DOMAIN, ProfileRelease.BLOCKED, estimation.Profile.Domain, "unit-published", estimation.SurfaceId);
+            Check(profile.Evidence == EvidenceType.PUBLISHED_MEASUREMENT && profile.CalibrationStatus == CalibrationStatus.CALIBRATED_IN_DOMAIN, "measured evidence may reach CALIBRATED_IN_DOMAIN");
+            Check(profile.Release == ProfileRelease.BLOCKED, "a profile must not be released without explicit approval");
+            Check(profile.SurfaceId == estimation.SurfaceId && profile.SurfaceId.Length > 0, "the profile is bound to the surface the training records describe");
+        });
+
+        test("Calibration: angular impulse residual is computed from the observations", () =>
+        {
+            var dataset = BounceDataset.Load(Path.Combine(Root(), "data", "bounce", "manifest.json"), new[] { "cross2002-tennis-ball-surfaces" });
+            var config = new FitConfig { Model = "M1", BootstrapResamples = 0 };
+            var estimation = Fit.Run("M1", dataset, config, tolerances, estimateBeta: false);
+            var report = Metrics.Evaluate(estimation.Profile, dataset.Split("validation"), "validation", config, tolerances, gateTargets: false);
+            Check(report.AngularImpulseResidualCount == 1, "the validation record observes spin");
+            Check(report.AngularImpulseResidualMedianOverUncertainty > 1.5, "the published impulse pair violates the rigid tangential coupling well beyond its uncertainty: " + report.AngularImpulseResidualMedianOverUncertainty);
+            var test = Metrics.Evaluate(estimation.Profile, dataset.Split("test"), "test", config, tolerances, gateTargets: false);
+            Check(test.AngularImpulseResidualCount == 4);
+            Check(test.AngularImpulseResiduals.Count == 4 && test.AngularImpulseResidualMaxNs > test.AngularImpulseResidualMedianNs, "per-record residuals must be reported, not only an average");
+        });
+
         test("Calibration: lookup table export stays within the comparison tolerance", () =>
         {
             var ball = BounceProfiles.NominalType2();
@@ -181,6 +232,12 @@ public static class CalibrationTests
         string manifest = Synthetic.ManifestJson(spec, "records.jsonl", "unit test");
         File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest);
         return BounceDataset.Load(Path.Combine(directory, "manifest.json"));
+    }
+
+    private static List<BounceRecord> Published()
+    {
+        var dataset = BounceDataset.Load(Path.Combine(Root(), "data", "bounce", "manifest.json"), new[] { "cross2002-tennis-ball-surfaces" });
+        return dataset.Records;
     }
 
     private static BounceDataset DatasetWithoutRecords(BounceDataset source)

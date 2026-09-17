@@ -58,6 +58,10 @@ public sealed class Estimation
     public double ValidationLoss { get; set; }
     public double TrainNormalisedRmse { get; set; }
     public double ValidationNormalisedRmse { get; set; }
+    // The joint metric covers every residual the fit itself uses (normal, tangential, angular). Model
+    // selection and the complexity gate follow this number, not the normal component alone.
+    public double TrainJointNormalisedRmse { get; set; }
+    public double ValidationJointNormalisedRmse { get; set; }
     public int NormalRecords { get; set; }
     public int TangentialRecords { get; set; }
     public int AngularRecords { get; set; }
@@ -65,6 +69,9 @@ public sealed class Estimation
     public List<string> Warnings { get; set; } = new();
     public int Evaluations { get; set; }
     public InteractionProfile Profile { get; set; } = new();
+    // Surface of the majority of the records the estimation actually used. Court or material labels
+    // are never mapped onto a profile by name.
+    public string SurfaceId { get; set; } = "";
 }
 
 public static class Fit
@@ -80,12 +87,14 @@ public static class Fit
     public static SurfaceSample Sample(BounceRecord record, BallSpec ball)
     {
         var normal = record.NormalVector;
+        // Flat-contact records without a measured position derive the contact point from the normal;
+        // the collision equations only use the normal and the surface clearance.
         return new SurfaceSample
         {
             ContactPositionM = record.Position - normal * ball.RadiusM,
             Normal = normal,
             MaterialId = record.SurfaceId,
-            LocationId = record.LocationId,
+            LocationId = record.Observed.PositionMeasured ? record.LocationId : "derived-flat-contact",
             ConditionMetadata = record.SurfaceConditionId
         };
     }
@@ -105,20 +114,27 @@ public static class Fit
         public double AngularErrorRadS;
         public double? AngleErrorDeg;
         public ActiveImpulseLimit Limit;
+        public Vec3 PredictedVelocityMS;
+        public Vec3 PredictedAngularVelocityRadS;
     }
 
     // Forward evaluation of one record against a profile. The sim reads the record only through
-    // ResolveBounce, so fitting and runtime share exactly one model implementation.
+    // ResolveBounce, so fitting and runtime share exactly one model implementation. Observation masks
+    // are axis aligned: an unobserved component contributes no residual and no sigma weight.
     public static Quality? Evaluate(InteractionProfile profile, BounceRecord record, BounceTolerances tolerances)
     {
         var ball = BallFor(record);
         var result = BounceModel.Resolve(PreState(record), ball, null, Sample(record, ball), profile, tolerances);
         if (result.Status != BounceStatus.RESOLVED) return null;
         var normal = record.NormalVector;
-        var predicted = result.PostState.VelocityMS - record.VelocityAfter;
-        double normalError = BounceModel.Dot(predicted, normal);
-        double tangentialError = BounceModel.Perp(predicted, normal).Length;
-        double angularError = (result.PostState.AngularVelocityRadS - record.SpinAfter).Length;
+        bool[] mask = record.Observed.VelocityAfter;
+        bool[] angularMask = record.Observed.AngularVelocityAfter;
+        var error = Masked(result.PostState.VelocityMS - record.VelocityAfter, mask);
+        bool normalObserved = mask[NormalAxis(normal)];
+        double normalError = normalObserved ? BounceModel.Dot(error, normal) : 0.0;
+        double tangentialError = BounceModel.Perp(error, normal).Length;
+        var angularErrorVector = Masked(result.PostState.AngularVelocityRadS - record.SpinAfter, angularMask);
+        double angularError = angularErrorVector.Length;
         double predictedTangential = BounceModel.Perp(result.PostState.VelocityMS, normal).Length;
         double observedTangential = BounceModel.Perp(record.VelocityAfter, normal).Length;
         double? angleError = null;
@@ -128,7 +144,33 @@ public static class Fit
             double observedAngle = Math.Atan2(BounceModel.Dot(record.VelocityAfter, normal), observedTangential);
             angleError = Math.Abs(predictedAngle - observedAngle) * 180.0 / Math.PI;
         }
-        return new Quality { NormalErrorMS = normalError, TangentialErrorMS = tangentialError, AngularErrorRadS = angularError, AngleErrorDeg = angleError, Limit = result.ActiveImpulseLimit };
+        return new Quality
+        {
+            NormalErrorMS = normalError,
+            TangentialErrorMS = tangentialError,
+            AngularErrorRadS = angularError,
+            AngleErrorDeg = angleError,
+            Limit = result.ActiveImpulseLimit,
+            PredictedVelocityMS = result.PostState.VelocityMS,
+            PredictedAngularVelocityRadS = result.PostState.AngularVelocityRadS
+        };
+    }
+
+    private static Vec3 Masked(Vec3 value, bool[] mask) => new Vec3(mask[0] ? value.X : 0.0, mask[1] ? value.Y : 0.0, mask[2] ? value.Z : 0.0);
+
+    private static int NormalAxis(Vec3 normal)
+    {
+        double x = Math.Abs(normal.X), y = Math.Abs(normal.Y), z = Math.Abs(normal.Z);
+        return x >= y && x >= z ? 0 : y >= z ? 1 : 2;
+    }
+
+    // Standard deviation of the observed components only; an unobserved component must not change
+    // the weight of the residual vector.
+    public static double ObservedSigma(double[] sigma, bool[] mask)
+    {
+        double sum = 0; int count = 0;
+        for (int i = 0; i < 3; i++) if (mask[i]) { sum += sigma[i] * sigma[i]; count++; }
+        return count == 0 ? sigma[Math.Max(0, Array.FindIndex(sigma, s => s > 0))] : Math.Sqrt(sum / count);
     }
 
     public static InteractionProfile BuildProfile(string model, double[] p, double vrefMs, string ballSpecId, string surfaceId)
@@ -140,6 +182,11 @@ public static class Fit
                 profile.NormalResponse.Kind = NormalResponseKind.Constant; profile.NormalResponse.En0 = p[0];
                 profile.FrictionResponse.Kind = FrictionResponseKind.Constant; profile.FrictionResponse.Mu0 = p[1];
                 profile.TangentialResponse.Kind = TangentialResponseKind.Zero;
+                return profile;
+            case "M1B":
+                profile.NormalResponse.Kind = NormalResponseKind.Constant; profile.NormalResponse.En0 = p[0];
+                profile.FrictionResponse.Kind = FrictionResponseKind.Constant; profile.FrictionResponse.Mu0 = p[1];
+                profile.TangentialResponse.Kind = TangentialResponseKind.ConstantBeta; profile.TangentialResponse.Beta = p[2];
                 return profile;
             case "M2":
                 profile.NormalResponse.Kind = NormalResponseKind.StateDependentSigmoid;
@@ -161,6 +208,7 @@ public static class Fit
     public static string[] ParameterNames(string model) => model switch
     {
         "M1" => new[] { "en", "mu_eff" },
+        "M1B" => new[] { "en", "mu_eff", "beta_grip" },
         "M2" => new[] { "en.a0", "en.a1", "en.a2", "mu_eff" },
         "M3" => new[] { "en.a0", "en.a1", "en.a2", "mu_max", "mu.b0", "mu.b1", "beta_grip" },
         _ => throw new ArgumentException("Unknown model " + model)
@@ -169,6 +217,7 @@ public static class Fit
     public static double[] LowerBounds(string model, FitConfig config) => model switch
     {
         "M1" => new[] { 0.02, 0.0 },
+        "M1B" => new[] { 0.02, 0.0, 0.0 },
         "M2" => new[] { -config.ParameterBoundAbs, -config.ParameterBoundAbs, -config.ParameterBoundAbs, 0.0 },
         "M3" => new[] { -config.ParameterBoundAbs, -config.ParameterBoundAbs, -config.ParameterBoundAbs, 0.02, -config.ParameterBoundAbs, -config.ParameterBoundAbs, 0.0 },
         _ => throw new ArgumentException("Unknown model " + model)
@@ -177,6 +226,7 @@ public static class Fit
     public static double[] UpperBounds(string model, FitConfig config) => model switch
     {
         "M1" => new[] { 0.999, config.MuMaxCap },
+        "M1B" => new[] { 0.999, config.MuMaxCap, 0.999 },
         "M2" => new[] { config.ParameterBoundAbs, config.ParameterBoundAbs, config.ParameterBoundAbs, config.MuMaxCap },
         "M3" => new[] { config.ParameterBoundAbs, config.ParameterBoundAbs, config.ParameterBoundAbs, config.MuMaxCap, config.ParameterBoundAbs, config.ParameterBoundAbs, 0.999 },
         _ => throw new ArgumentException("Unknown model " + model)
@@ -185,6 +235,7 @@ public static class Fit
     public static double[] Initial(string model) => model switch
     {
         "M1" => new[] { 0.80, 0.40 },
+        "M1B" => new[] { 0.80, 0.40, 0.10 },
         "M2" => new[] { 1.60, 0.0, 0.0, 0.40 },
         "M3" => new[] { 1.60, 0.0, 0.0, 0.80, 0.0, 0.0, 0.0 },
         _ => throw new ArgumentException("Unknown model " + model)
@@ -193,6 +244,7 @@ public static class Fit
     private static int[] NormalIndices(string model) => model switch
     {
         "M1" => new[] { 0 },
+        "M1B" => new[] { 0 },
         "M2" => new[] { 0, 1, 2 },
         "M3" => new[] { 0, 1, 2 },
         _ => throw new ArgumentException("Unknown model " + model)
@@ -201,12 +253,13 @@ public static class Fit
     private static int[] FrictionIndices(string model) => model switch
     {
         "M1" => new[] { 1 },
+        "M1B" => new[] { 1 },
         "M2" => new[] { 3 },
         "M3" => new[] { 3, 4, 5 },
         _ => throw new ArgumentException("Unknown model " + model)
     };
 
-    private static int BetaIndex(string model) => model == "M3" ? 6 : -1;
+    private static int BetaIndex(string model) => model switch { "M1B" => 2, "M3" => 6, _ => -1 };
 
     private enum Stage { Normal, Tangential, Joint }
 
@@ -226,12 +279,12 @@ public static class Fit
             var quality = Evaluate(profile, record, tolerances);
             if (quality == null) continue;
             var residuals = new List<double>();
-            double sigmaV = Math.Sqrt(record.VelocityAfterStdDevMS.Sum(s => s * s) / 3.0);
-            double sigmaW = Math.Sqrt(record.AngularVelocityAfterStdDevRadS.Sum(s => s * s) / 3.0);
+            double sigmaV = ObservedSigma(record.VelocityAfterStdDevMS, record.Observed.VelocityAfter);
+            double sigmaW = ObservedSigma(record.AngularVelocityAfterStdDevRadS, record.Observed.AngularVelocityAfter);
             if (stage == Stage.Normal) residuals.Add(quality.NormalErrorMS / sigmaV);
             else
             {
-                residuals.Add(0.7071067811865476 * quality.TangentialErrorMS / sigmaV);
+                if (record.TangentialVelocityObserved) residuals.Add(0.7071067811865476 * quality.TangentialErrorMS / sigmaV);
                 if (record.UsableForAngular) residuals.Add(0.5773502691896257 * quality.AngularErrorRadS / sigmaW);
             }
             foreach (double r in residuals)
@@ -283,7 +336,7 @@ public static class Fit
 
     public static Estimation Run(string model, BounceDataset dataset, FitConfig config, BounceTolerances tolerances, bool estimateBeta)
     {
-        var train = dataset.Split(config.TrainSplit).Where(r => r.UsableForTangential).ToList();
+        var train = dataset.Split(config.TrainSplit).Where(r => r.UsableForTangential && r.TangentialVelocityObserved).ToList();
         var trainNormal = dataset.Split(config.TrainSplit).Where(r => r.HasVelocityAfterObservation && Math.Abs(BounceModel.Dot(r.VelocityBefore, r.NormalVector)) >= config.NormalApproachFloorMS).ToList();
         var validation = dataset.Split(config.ValidationSplit).Where(r => r.UsableForTangential).ToList();
         var validationNormal = dataset.Split(config.ValidationSplit).Where(r => r.HasVelocityAfterObservation).ToList();
@@ -331,24 +384,31 @@ public static class Fit
         estimation.TrainLoss = bestTrain;
         estimation.ValidationLoss = bestValidation;
         estimation.Evaluations = bestEvaluations;
-        estimation.Profile = BuildProfile(model, bestParameters, config.VrefMS, BounceProfiles.NominalBallId, dataset.Manifest.Datasets.First().SurfaceId);
-        estimation.TrainNormalisedRmse = Normalised(estimation.Profile, train, tolerances);
-        estimation.ValidationNormalisedRmse = Normalised(estimation.Profile, validation, tolerances);
+        estimation.SurfaceId = train.GroupBy(r => r.SurfaceId).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal).First().Key;
+        estimation.Profile = BuildProfile(model, bestParameters, config.VrefMS, BounceProfiles.NominalBallId, estimation.SurfaceId);
+        estimation.TrainNormalisedRmse = Normalised(estimation.Profile, train, tolerances, joint: false);
+        estimation.ValidationNormalisedRmse = Normalised(estimation.Profile, validation, tolerances, joint: false);
+        estimation.TrainJointNormalisedRmse = Normalised(estimation.Profile, train, tolerances, joint: true);
+        estimation.ValidationJointNormalisedRmse = Normalised(estimation.Profile, validation, tolerances, joint: true);
         foreach (var record in train) { var quality = Evaluate(estimation.Profile, record, tolerances); if (quality != null) estimation.LimitModes[quality.Limit.ToString()] = estimation.LimitModes.GetValueOrDefault(quality.Limit.ToString()) + 1; }
         Summarise(estimation, dataset, config, tolerances, model, estimateBeta);
         return estimation;
     }
 
-    private static double Normalised(InteractionProfile profile, IReadOnlyList<BounceRecord> records, BounceTolerances tolerances)
+    private static double Normalised(InteractionProfile profile, IReadOnlyList<BounceRecord> records, BounceTolerances tolerances, bool joint)
     {
         double sum = 0; int count = 0;
         foreach (var record in records)
         {
             var quality = Evaluate(profile, record, tolerances);
             if (quality == null) continue;
-            double sigmaV = Math.Sqrt(record.VelocityAfterStdDevMS.Sum(s => s * s) / 3.0);
+            double sigmaV = ObservedSigma(record.VelocityAfterStdDevMS, record.Observed.VelocityAfter);
+            double sigmaW = ObservedSigma(record.AngularVelocityAfterStdDevRadS, record.Observed.AngularVelocityAfter);
             sum += quality.NormalErrorMS * quality.NormalErrorMS / (sigmaV * sigmaV);
             count++;
+            if (!joint) continue;
+            if (record.TangentialVelocityObserved) { sum += 0.5 * quality.TangentialErrorMS * quality.TangentialErrorMS / (sigmaV * sigmaV); count++; }
+            if (record.UsableForAngular) { sum += (1.0 / 3.0) * quality.AngularErrorRadS * quality.AngularErrorRadS / (sigmaW * sigmaW); count++; }
         }
         return count == 0 ? 0 : Math.Sqrt(sum / count);
     }

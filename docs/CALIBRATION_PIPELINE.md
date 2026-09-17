@@ -84,3 +84,22 @@ profile and computes e_test, mu_test, the 23 degrees C correction e_23 and the r
 procedure: surface conditioning, the full measurement protocol and any certification claim are absent, no
 classification band is asserted, and the raw unrounded CPR is preserved. A synthetic profile makes this
 command exit 1 so it cannot be mistaken for a measurement.
+
+
+## Update 2026-09-17
+
+- Data subsets: validate-data, fit and evaluate accept --datasets id,id. The loaded subset is what gets hashed,
+  and evaluate refuses to run when the manifest no longer hashes to the run's dataset hash.
+- Candidates: M1 (constant en, mu, beta = 0), M1B (constant en, mu, beta), M2 (state dependent en), M3 (state
+  dependent en and mu with beta). Model selection and the complexity gate use the joint normalised residual over
+  normal, tangential and angular residuals, so a model that only improves the normal component is not promoted.
+- Observation masks are axis aligned and are honoured end to end: an unseen component contributes no residual
+  and no sigma weight, and a record without a measured contact position is still usable when the normal is
+  measured.
+- evaluate --per-record prints observed and predicted normal speed, tangential speed and spin for every record.
+  Small published datasets must be reported this way; an average hides a structural failure.
+- Every evaluation reports the section 12.4 angular impulse residual R_L = I (omega2 - omega1) -
+  r x (m (v2 - v1)) with its propagated uncertainty, computed from the observations alone. A ratio above about 1
+  means the rigid tangential coupling of V1 is contradicted by that record.
+- EMPIRICAL_DATA classification: MISSING with no measured record, LIMITED below 25 measured records or below
+  3 independent measured groups, otherwise SUFFICIENT for this tool. Sample size never establishes a domain.

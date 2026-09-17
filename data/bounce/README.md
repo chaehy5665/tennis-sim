@@ -34,3 +34,26 @@ unknown, not as zero spin, and such a record is used for the normal response onl
 
 Without measured records, fit exits 3 (DATA_INSUFFICIENT) and exports no profile. A synthetic fit requires the
 explicit --synthetic flag and yields a DEV_ONLY, SYNTHETIC profile that is never a calibration claim.
+
+
+## Published measurements (added 2026-09-17)
+
+- published/cross2002-records.jsonl: 7 records extracted from Cross 2002 (Am. J. Phys. 70, 482). Six are
+  typical single bounces from Table II (wood, emery paper, Rebound Ace at 20 and 45 degrees, 60 cm drop), one is
+  the fully specified bounce from Table I (emery, 20 degrees, 25 cm drop) with published per-component
+  uncertainties.
+- published/cross2002-extraction.json: source hashes, extraction method, uncertainty basis and the derived-column
+  checks that must pass before a record is written.
+- scripts/build-cross2002-records.py regenerates the record file and refuses to write anything when the
+  recomputed derived columns disagree with the paper, or when the supplied PDF hash differs.
+
+Record conventions used by these files:
+
+- positionMeasured = false: the source measures speeds and angles, not a court position. The contact is derived
+  from the measured normal at an arbitrary origin, and the loader treats the record as usable.
+- AngularVelocityBeforeMeasured = true with zeros: zero incident spin is an experimental condition stated by the
+  source (vertical drop, no torque in flight). An unmeasured spin must instead stay false with zero values.
+- Component masks are axis aligned. An unobserved component contributes no residual and no sigma weight; its
+  sigma entry is a placeholder.
+- Every record carries the gravity-during-contact caveat, the ball-spec substitution (paper radius 0.033 m
+  against the nominal 0.0335 m) and the fact that Table II reports a single typical bounce rather than an average.

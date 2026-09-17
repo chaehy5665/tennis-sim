@@ -93,7 +93,29 @@ public sealed class BounceRecord
     public Vec3 SpinBefore => new(AngularVelocityBeforeRadS[0], AngularVelocityBeforeRadS[1], AngularVelocityBeforeRadS[2]);
     public Vec3 SpinAfter => new(AngularVelocityAfterRadS[0], AngularVelocityAfterRadS[1], AngularVelocityAfterRadS[2]);
 
-    public bool HasVelocityAfterObservation => Observed.VelocityAfter.Length == 3 && Observed.VelocityAfter[0] && Observed.VelocityAfter[1] && Observed.VelocityAfter[2] && Observed.PositionMeasured && Observed.NormalMeasured;
+    // Axis of the surface normal in the record frame. Observation masks are axis aligned, so the mask
+    // bit of the dominant normal axis decides whether the normal response is observed.
+    public static int DominantAxis(Vec3 normal)
+    {
+        double x = Math.Abs(normal.X), y = Math.Abs(normal.Y), z = Math.Abs(normal.Z);
+        return x >= y && x >= z ? 0 : y >= z ? 1 : 2;
+    }
+
+    private bool MaskObserved(bool[] mask, int axis) => mask.Length == 3 && mask[axis];
+
+    // A published flat-contact measurement states the contact normal but not a court position: the
+    // contact point is then derived from the normal and the position values are ignored.
+    public bool HasVelocityAfterObservation => Observed.NormalMeasured && MaskObserved(Observed.VelocityAfter, DominantAxis(NormalVector));
+    // The friction parameters can only be constrained when the outgoing tangential velocity is observed.
+    public bool TangentialVelocityObserved
+    {
+        get
+        {
+            int normalAxis = DominantAxis(NormalVector);
+            for (int axis = 0; axis < 3; axis++) if (axis != normalAxis && MaskObserved(Observed.VelocityAfter, axis)) return true;
+            return false;
+        }
+    }
     // Tangential and spin response require a measured incident spin: without it the contact slip is unknown.
     public bool UsableForTangential => HasVelocityAfterObservation && Observed.AngularVelocityBeforeMeasured;
     public bool UsableForAngular => UsableForTangential && Observed.AngularVelocityAfter.Length == 3 && (Observed.AngularVelocityAfter[0] || Observed.AngularVelocityAfter[1] || Observed.AngularVelocityAfter[2]);
@@ -112,6 +134,7 @@ public sealed class BounceRecord
         Require(RecordId, "velocityAfterStdDevMS", VelocityAfterStdDevMS, 3); Require(RecordId, "angularVelocityAfterStdDevRadS", AngularVelocityAfterStdDevRadS, 3);
         foreach (double sigma in VelocityAfterStdDevMS.Concat(AngularVelocityAfterStdDevRadS)) if (sigma <= 0) throw new ArgumentException("Observation standard deviations must be positive on " + RecordId);
         if (Math.Abs(NormalVector.Length - 1) > 1e-9) throw new ArgumentException("Normal must be normalized on " + RecordId);
+        if (!Observed.PositionMeasured && !Observed.NormalMeasured) throw new ArgumentException("A record without a measured contact position must still declare a measured normal on " + RecordId);
         if (!Observed.AngularVelocityBeforeMeasured && SpinBefore.Length != 0) throw new ArgumentException("Unmeasured incident spin must be reported as zeros plus mask=false on " + RecordId);
         if (!Observed.VelocityAfter.Length.Equals(3) || !Observed.AngularVelocityAfter.Length.Equals(3)) throw new ArgumentException("Observation mask must have three components per vector on " + RecordId);
         if (ExtractionUncertainty.HasValue && ExtractionUncertainty.Value < 0) throw new ArgumentException("Negative extraction uncertainty on " + RecordId);
@@ -201,10 +224,20 @@ public sealed class BounceDataset
     public int MeasuredRecords => Records.Count(r => r.EvidenceType is EvidenceType.MEASURED_RAW or EvidenceType.PUBLISHED_MEASUREMENT or EvidenceType.DIGITIZED_MEASUREMENT);
     public int SyntheticRecords => Records.Count(r => r.EvidenceType == EvidenceType.SYNTHETIC);
 
-    public static BounceDataset Load(string manifestPath)
+    public static BounceDataset Load(string manifestPath, IEnumerable<string>? datasetIds = null)
     {
         string directory = Path.GetDirectoryName(Path.GetFullPath(manifestPath)) ?? ".";
-        var manifest = CalibrationJson.Load<BounceManifest>(manifestPath);
+        var loaded = CalibrationJson.Load<BounceManifest>(manifestPath);
+        // A run may restrict itself to a subset of the datasets in one manifest; the dataset hash then
+        // covers exactly that subset, so an evaluation can only reuse the same records.
+        var manifest = loaded;
+        var wanted = datasetIds?.ToArray();
+        if (wanted != null && wanted.Length > 0)
+        {
+            manifest = CalibrationJson.Deserialize<BounceManifest>(CalibrationJson.Serialize(loaded));
+            manifest.Datasets.RemoveAll(d => !wanted.Contains(d.DatasetId));
+            if (manifest.Datasets.Count == 0) throw new ArgumentException("No dataset in " + manifestPath + " matches: " + string.Join(",", wanted));
+        }
         if (manifest.SchemaVersion != "1.0") throw new ArgumentException("Unsupported manifest schema " + manifest.SchemaVersion);
         var sourceIds = manifest.Sources.Select(s => s.SourceId).ToHashSet();
         var records = new List<BounceRecord>();

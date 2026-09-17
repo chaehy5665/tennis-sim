@@ -30,6 +30,15 @@ public sealed class EvaluationReport
     public double? AngularSpeedP95Rpm { get; set; }
     public double? ExitAngleRmseDeg { get; set; }
     public double? ExitAngleP95Deg { get; set; }
+    // Structural diagnostic of the instruction document section 12.4, computed from the observations
+    // alone: R_L = I (omega_after - omega_before) - r x (m (v_after - v_before)). V1 requires R_L to sit
+    // inside the measurement uncertainty; a systematic residual means the impulse model is missing
+    // physics (contact torque, moving reaction point, deformation, geometry or timing error).
+    public int AngularImpulseResidualCount { get; set; }
+    public double? AngularImpulseResidualMedianNs { get; set; }
+    public double? AngularImpulseResidualMaxNs { get; set; }
+    public double? AngularImpulseResidualMedianOverUncertainty { get; set; }
+    public List<object> AngularImpulseResiduals { get; set; } = new();
     public Dictionary<string, GroupMetrics> BySurface { get; set; } = new();
     public Dictionary<string, GroupMetrics> BySession { get; set; } = new();
     public List<string> TargetViolations { get; set; } = new();
@@ -76,6 +85,34 @@ public static class Metrics
         report.AngularSpeedP95Rpm = P95(angular) * 60.0 / (2 * Math.PI);
         report.ExitAngleRmseDeg = Rmse(angle);
         report.ExitAngleP95Deg = P95(angle);
+        // Angular impulse residual, independent of the fitted profile.
+        var residualMagnitudes = new List<double>();
+        var residualRatios = new List<double>();
+        foreach (var record in records)
+        {
+            if (!record.UsableForAngular) continue;
+            var ball = Fit.BallFor(record);
+            var recordNormal = record.NormalVector;
+            Vec3 offset = recordNormal * (-ball.RadiusM);
+            Vec3 deltaVelocity = record.VelocityAfter - record.VelocityBefore;
+            Vec3 deltaSpin = record.SpinAfter - record.SpinBefore;
+            Vec3 residual = deltaSpin * ball.InertiaKgM2 - BounceModel.Cross(offset, deltaVelocity * ball.MassKg);
+            double sigmaSpin = Fit.ObservedSigma(record.AngularVelocityAfterStdDevRadS, record.Observed.AngularVelocityAfter);
+            double sigmaVelocity = Fit.ObservedSigma(record.VelocityAfterStdDevMS, record.Observed.VelocityAfter);
+            double sigma = Math.Sqrt(Math.Pow(ball.InertiaKgM2 * sigmaSpin, 2) + Math.Pow(ball.RadiusM * ball.MassKg * sigmaVelocity, 2));
+            residualMagnitudes.Add(residual.Length);
+            residualRatios.Add(sigma <= 0 ? 0 : residual.Length / sigma);
+            report.AngularImpulseResiduals.Add(new { record.RecordId, surface = record.SurfaceId, residualNs = residual.Length, uncertaintyNs = sigma, ratio = sigma <= 0 ? 0 : residual.Length / sigma });
+            report.AngularImpulseResidualCount++;
+        }
+        if (residualMagnitudes.Count > 0)
+        {
+            var ordered = residualMagnitudes.OrderBy(v => v).ToArray();
+            var orderedRatios = residualRatios.OrderBy(v => v).ToArray();
+            report.AngularImpulseResidualMedianNs = ordered[ordered.Length / 2];
+            report.AngularImpulseResidualMaxNs = ordered[ordered.Length - 1];
+            report.AngularImpulseResidualMedianOverUncertainty = orderedRatios[orderedRatios.Length / 2];
+        }
         foreach (var pair in bySurface) report.BySurface[pair.Key] = Summarise(profile, pair.Value, tolerances);
         foreach (var pair in bySession) report.BySession[pair.Key] = Summarise(profile, pair.Value, tolerances);
         if (gateTargets)

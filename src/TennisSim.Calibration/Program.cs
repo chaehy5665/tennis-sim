@@ -11,6 +11,8 @@ public sealed class CandidateSummary
     public double ValidationLoss { get; set; }
     public double TrainNormalisedRmse { get; set; }
     public double ValidationNormalisedRmse { get; set; }
+    public double TrainJointNormalisedRmse { get; set; }
+    public double ValidationJointNormalisedRmse { get; set; }
     public int Evaluations { get; set; }
     public bool Selected { get; set; }
     public List<string> Warnings { get; set; } = new();
@@ -23,6 +25,8 @@ public sealed class FitRun
     public string Status { get; set; } = "";
     public string Model { get; set; } = "";
     public string Evidence { get; set; } = "";
+    public List<string> DatasetIds { get; set; } = new();
+    public string SurfaceId { get; set; } = "";
     public string DatasetHash { get; set; } = "";
     public string ManifestPath { get; set; } = "";
     public string ManifestHash { get; set; } = "";
@@ -141,7 +145,7 @@ internal static class Program
 
     private static int ValidateData(Args options)
     {
-        var dataset = BounceDataset.Load(options.Get("dataset", "data/bounce/manifest.json"));
+        var dataset = BounceDataset.Load(options.Get("dataset", "data/bounce/manifest.json"), Split(options.Get("datasets", "")));
         var report = new
         {
             dataset.ManifestPath,
@@ -156,13 +160,26 @@ internal static class Program
             recordsPerDataset = dataset.RecordsPerDataset,
             splits = new[] { "train", "validation", "test" }.ToDictionary(s => s, s => dataset.Split(s).Count()),
             groups = dataset.Splits.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new { group = p.Key, split = p.Value }).ToList(),
-            empiricalData = dataset.MeasuredRecords == 0 ? "MISSING" : "PRESENT",
-            unconstrained = dataset.Records.Count(r => !r.UsableForTangential) + " records without measured incident spin (normal response only)"
+            empiricalData = EmpiricalData(dataset),
+            recordsWithoutMeasuredIncidentSpin = dataset.Records.Count(r => !r.Observed.AngularVelocityBeforeMeasured),
+            recordsWithoutTangentialVelocityObservation = dataset.Records.Count(r => !r.TangentialVelocityObserved),
+            recordsWithoutObservedOutgoingSpin = dataset.Records.Count(r => !r.UsableForAngular)
         };
         if (options.Has("out")) CalibrationJson.Save(options.Get("out"), report);
         Console.WriteLine(CalibrationJson.Serialize(report));
-        Console.WriteLine("EMPIRICAL_DATA: " + (dataset.MeasuredRecords == 0 ? "MISSING" : "SUFFICIENT"));
+        Console.WriteLine("EMPIRICAL_DATA: " + EmpiricalData(dataset));
         return 0;
+    }
+
+    // Documented classification rule: no measured record is MISSING; fewer than 25 measured records or
+    // fewer than 3 independent measured groups is LIMITED; otherwise SUFFICIENT for this tool. Sample
+    // size alone never establishes a valid domain, so the fitted domain is reported separately.
+    private static string EmpiricalData(BounceDataset dataset)
+    {
+        int measured = dataset.MeasuredRecords;
+        if (measured == 0) return "MISSING";
+        int groups = dataset.Records.Where(r => r.EvidenceType != EvidenceType.SYNTHETIC).Select(dataset.GroupOf).Distinct().Count();
+        return measured < 25 || groups < 3 ? "LIMITED" : "SUFFICIENT";
     }
 
     private static int SyntheticCommand(Args options)
@@ -208,7 +225,8 @@ internal static class Program
 
     private static int FitCommand(Args options, BounceTolerances tolerances)
     {
-        var dataset = BounceDataset.Load(options.Get("dataset", "data/bounce/manifest.json"));
+        var datasetIds = Split(options.Get("datasets", ""));
+        var dataset = BounceDataset.Load(options.Get("dataset", "data/bounce/manifest.json"), datasetIds);
         var config = LoadConfig(options.Get("config", "calibration/fit-config.json"));
         string runId = options.Get("run-id", Path.GetFileName(options.Get("out", "run-001")));
         string output = options.Get("out", "artifacts/calibration/" + runId);
@@ -219,6 +237,7 @@ internal static class Program
         {
             RunId = runId,
             Model = models,
+            DatasetIds = dataset.Manifest.Datasets.Select(d => d.DatasetId).ToList(),
             DatasetHash = dataset.DatasetHash,
             ManifestPath = dataset.ManifestPath,
             ManifestHash = dataset.ManifestHash,
@@ -258,14 +277,16 @@ internal static class Program
                 ValidationLoss = estimation.ValidationLoss,
                 TrainNormalisedRmse = estimation.TrainNormalisedRmse,
                 ValidationNormalisedRmse = estimation.ValidationNormalisedRmse,
+                TrainJointNormalisedRmse = estimation.TrainJointNormalisedRmse,
+                ValidationJointNormalisedRmse = estimation.ValidationJointNormalisedRmse,
                 Evaluations = estimation.Evaluations,
                 Warnings = estimation.Warnings.Distinct().ToList()
             };
             // Complexity gate: a richer model must improve the validation residual by more than the
             // pre-registered relative gain, not merely the training residual.
-            bool better = selected == null || summary.ValidationNormalisedRmse < selectedSummary!.ValidationNormalisedRmse;
+            bool better = selected == null || summary.ValidationJointNormalisedRmse < selectedSummary!.ValidationJointNormalisedRmse;
             bool allowed = selected == null || summary.ParameterCount <= selectedSummary!.ParameterCount
-                || summary.ValidationNormalisedRmse < selectedSummary.ValidationNormalisedRmse * (1 - config.ValidationRmseGainForComplexity);
+                || summary.ValidationJointNormalisedRmse < selectedSummary.ValidationJointNormalisedRmse * (1 - config.ValidationRmseGainForComplexity);
             if (better && allowed) { selected = estimation; selectedSummary = summary; }
             candidates.Add(summary);
         }
@@ -279,11 +300,20 @@ internal static class Program
         var testReport = Metrics.Evaluate(selected.Profile, dataset.Split(config.TestSplit), config.TestSplit, config, tolerances, gateTargets: measured);
         run.ValidationReport = validationReport;
         run.TestReport = testReport;
-        bool validationPassed = validationReport.TargetViolations.Count == 0 && selected.Fits.All(f => f.Status is "IDENTIFIED" or "FIXED" || f.Status == "LOWER_BOUND_ONLY");
+        // The metric gate and parameter identification are separate statements. A profile can reproduce
+        // the held-out impacts while one coefficient stays only bounded, and that must not be reported
+        // as a validation failure.
+        bool metricsPassed = validationReport.TargetViolations.Count == 0;
+        bool validationPassed = metricsPassed;
+        var unidentified = selected.Fits.Where(f => f.Status is "NOT_IDENTIFIED" or "UPPER_BOUND_ONLY" or "LOWER_BOUND_ONLY" or "AT_BOUNDARY").Select(f => f.Name + "=" + f.Status).ToList();
+        if (unidentified.Count > 0) run.Notes.Add("Parameters not fully identified by this dataset: " + string.Join(", ", unidentified));
+        if (!metricsPassed) run.Notes.Add("Held-out metrics exceeded the pre-registered targets: " + string.Join("; ", validationReport.TargetViolations));
         // Synthetic holdout performance is reported the same way but never becomes a calibration claim.
         var validationStatus = validationPassed ? ValidationStatus.PASS_IN_DOMAIN : ValidationStatus.FAIL;
+        run.Notes.Add("Angular impulse residual over " + validationReport.AngularImpulseResidualCount + " observed records: median " + Fmt(validationReport.AngularImpulseResidualMedianNs) + " N s, max " + Fmt(validationReport.AngularImpulseResidualMaxNs) + " N s, median/uncertainty " + Fmt(validationReport.AngularImpulseResidualMedianOverUncertainty));
         var release = evidence == EvidenceType.SYNTHETIC ? ProfileRelease.DEV_ONLY : options.Has("approve") && validationPassed ? ProfileRelease.APPROVED : ProfileRelease.BLOCKED;
-        string surfaceId = dataset.Manifest.Datasets.FirstOrDefault()?.SurfaceId ?? "unspecified";
+        string surfaceId = selected.SurfaceId.Length > 0 ? selected.SurfaceId : "unspecified";
+        run.SurfaceId = surfaceId;
         var profile = ProfileExport.Build(selected, run, evidence, validationStatus, release, run.Domain, runId, surfaceId);
         run.ProfileHash = ProfileHash.Compute(profile);
         run.Status = evidence == EvidenceType.SYNTHETIC ? "COMPLETE_SYNTHETIC_ONLY" : validationPassed ? "COMPLETE_MEASURED" : "COMPLETE_VALIDATION_FAILED";
@@ -292,7 +322,8 @@ internal static class Program
         ProfileExport.Save(output, profile, BounceProfiles.NominalType2(), run);
         Console.WriteLine("FIT model=" + profile.ModelId + "/" + selected.Model + " status=" + run.Status + " evidence=" + evidence + " release=" + release);
         Console.WriteLine("  parameters: " + string.Join(", ", selected.Fits.Select(f => f.Name + "=" + f.Value.ToString("R") + " [" + f.Status + "]")));
-        Console.WriteLine("  train normalised RMSE=" + selected.TrainNormalisedRmse.ToString("F5") + " validation normalised RMSE=" + selected.ValidationNormalisedRmse.ToString("F5"));
+        Console.WriteLine("  train normalised RMSE normal=" + selected.TrainNormalisedRmse.ToString("F5") + " joint=" + selected.TrainJointNormalisedRmse.ToString("F5")
+            + " validation normal=" + selected.ValidationNormalisedRmse.ToString("F5") + " joint=" + selected.ValidationJointNormalisedRmse.ToString("F5"));
         Console.WriteLine("  validation: normal=" + Fmt(validationReport.NormalSpeedRmseMS) + " m/s tangential=" + Fmt(validationReport.TangentialSpeedRmseMS) + " m/s angular=" + Fmt(validationReport.AngularSpeedRmseRpm) + " rpm angle=" + Fmt(validationReport.ExitAngleRmseDeg) + " deg");
         Console.WriteLine("  test:       normal=" + Fmt(testReport.NormalSpeedRmseMS) + " m/s tangential=" + Fmt(testReport.TangentialSpeedRmseMS) + " m/s angular=" + Fmt(testReport.AngularSpeedRmseRpm) + " rpm angle=" + Fmt(testReport.ExitAngleRmseDeg) + " deg");
         Console.WriteLine("  limit modes: " + string.Join(", ", selected.LimitModes.Select(p => p.Key + "=" + p.Value)));
@@ -302,6 +333,8 @@ internal static class Program
     }
 
     private static string Fmt(double? value) => value.HasValue ? value.Value.ToString("F5") : "n/a";
+
+    private static string[] Split(string value) => value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static ProfileDomain Domain(Estimation estimation, BounceDataset dataset, FitConfig config)
     {
@@ -323,7 +356,7 @@ internal static class Program
         string directory = options.Get("run", "");
         if (directory.Length == 0) throw new ArgumentException("--run directory is required");
         var run = LoadRun(directory);
-        var dataset = BounceDataset.Load(run.ManifestPath);
+        var dataset = BounceDataset.Load(run.ManifestPath, run.DatasetIds);
         if (dataset.DatasetHash != run.DatasetHash) throw new ArgumentException("Dataset hash changed since the fit run; refusing to evaluate against a different dataset");
         var profile = CalibrationJson.Load<InteractionProfile>(Path.Combine(directory, "profile.json"));
         string split = options.Get("split", "test");
@@ -338,6 +371,25 @@ internal static class Program
         foreach (var pair in report.BySurface) Console.WriteLine("  surface " + pair.Key + ": n=" + pair.Value.Count + " normal=" + Fmt(pair.Value.NormalSpeedRmseMS) + " tangential=" + Fmt(pair.Value.TangentialSpeedRmseMS) + " angle=" + Fmt(pair.Value.ExitAngleRmseDeg));
         foreach (string violation in report.TargetViolations) Console.WriteLine("  TARGET_VIOLATION: " + violation);
         foreach (string note in report.Notes) Console.WriteLine("  note: " + note);
+        if (options.Has("per-record"))
+        {
+            // Small published datasets must be reported record by record: an average hides a failure.
+            foreach (var record in dataset.Split(split))
+            {
+                var quality = Fit.Evaluate(profile, record, tolerances);
+                if (quality == null) { Console.WriteLine("  RECORD " + record.RecordId + " NOT_RESOLVED"); continue; }
+                var normal = record.NormalVector;
+                double observedNormal = BounceModel.Dot(record.VelocityAfter, normal);
+                double predictedNormal = BounceModel.Dot(quality.PredictedVelocityMS, normal);
+                double observedTangential = BounceModel.Perp(record.VelocityAfter, normal).Length;
+                double predictedTangential = BounceModel.Perp(quality.PredictedVelocityMS, normal).Length;
+                Console.WriteLine("  RECORD " + record.RecordId + " surface=" + record.SurfaceId + " limit=" + quality.Limit
+                    + " normalObserved=" + observedNormal.ToString("F4") + " normalPredicted=" + predictedNormal.ToString("F4")
+                    + " tangentialObserved=" + observedTangential.ToString("F4") + " tangentialPredicted=" + predictedTangential.ToString("F4")
+                    + " spinObserved=" + record.SpinAfter.X.ToString("F2") + " spinPredicted=" + quality.PredictedAngularVelocityRadS.X.ToString("F2")
+                    + " (record spin mask x=" + record.Observed.AngularVelocityAfter[0] + ")");
+            }
+        }
         return report.TargetViolations.Count > 0 ? 1 : 0;
     }
 

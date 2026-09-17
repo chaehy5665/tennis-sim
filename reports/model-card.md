@@ -74,3 +74,26 @@ UNCALIBRATED, validationStatus NOT_RUN, release DEV_ONLY.
 - The model does not reproduce measured spin behaviour by construction; whether V1 is adequate for real
   measured impacts is UNDETERMINED because no measured data exists here.
 - Only one platform (Linux x64) was executed for this model version.
+
+
+## Update 2026-09-17 - first empirical check
+
+The model has now been evaluated against published measurements (source C2002, seven low-speed bounces with
+zero incident spin on wood, emery paper and Rebound Ace). What changed in the status:
+
+- EMPIRICAL_DATA moves from MISSING to LIMITED. The training combination is laboratory emery paper at
+  2.1-2.4 m/s, 20 degrees, dry, room temperature. Every court relevant to gameplay stays uncalibrated.
+- The normal response is reproduced in-domain to 0.011 m/s against a published component precision of
+  0.03 m/s, so en is identified on that surface and the M1/M2 normal model is not contradicted.
+- V1's rigid coupling between the tangential impulse and the spin impulse is contradicted by the data: the
+  section 12.4 residual |R_L| = |I (omega2 - omega1) - r x (m (v2 - v1))| reaches 3.0 times its uncertainty on
+  the in-domain bounce and up to 4.3 times on a held-out surface. A constant tangential restitution
+  (beta_grip = 0.0495) improves the joint residual by 17 percent without removing the inconsistency.
+- mu_eff remains UPPER_BOUND_ONLY from this dataset because none of the low-speed bounces saturate the friction
+  limit; the fitted 0.6 is not a measured friction coefficient.
+- MODEL_ADEQUACY stays UNDETERMINED overall, with the spin result pointing at INADEQUATE for simultaneous
+  speed and spin reproduction. M4 (finite contact patch, extra torque, moving reaction point) would be the
+  next candidate if a decision is needed, and it must be justified by measured data rather than by this
+  seven-record sample.
+
+Details and per-record numbers: reports/empirical-validation-cross2002.md.

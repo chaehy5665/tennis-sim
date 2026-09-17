@@ -94,3 +94,59 @@ NEXT_SMALLEST_STEP: licensed real Editor -> prepare -> compile -> EditMode -> Pl
 ## 다음 최소 작업
 
 사용 가능한 정식 Editor 실행 파일을 `UNITY_EDITOR`로 지정해 **prepare** 단계에서 실제 버전과 패키지 구성을 확정한다. 이어 compile/EditMode/PlayMode를 통과시키고 Game 창을 직접 검토한다. [실행 안내](UNITY_VIEWER.md)의 순서와 증거 규칙을 따른다. 이 단계 전까지 전체 구현 완료나 Unity 실행/시각 검증 성공을 선언할 수 없다.
+
+
+## 2026-09-17 v3 handoff (prepared here, not executed)
+
+This section is the v3 procedure prepared on the Linux host, not a result. No Unity Editor exists on this
+machine, so compile, EditMode, PlayMode and screen review were NOT_RUN and must be recorded by a Mac session.
+The files and hashes below were produced by the engine at commit 432f0fe; scripts/prepare-unity-replay.sh
+verified the copies byte for byte.
+
+### What to bring to the Mac
+
+- The source tree up to commit 432f0fe, or at minimum unity/TennisSim.UnityViewer/Assets/TennisSim/**,
+  scripts/prepare-unity-replay.sh and scripts/validate-unity-viewer.sh.
+- The two local replay files (both are git-excluded; on the Mac they are recreated by the prepare script):
+
+| File | SHA-256 | Contents |
+|---|---|---|
+| artifacts/bounce/final/v3-legacy-42.json | f9bc7179634483c8bd845b0caf1e1741578a10dbcdd0c8e8f00bc56d07062b0b | legacy multiplicative bounce, 27 points, 2,309 events |
+| artifacts/bounce/final/v3-impulse-42.json | 40a5cf567e5755bddadb9c912c99f737161416316a6b1a6d81d44bb08c05391e | V1 impulse model, 28 points, 2,289 events |
+
+### Commands to run on the Mac
+
+    git -C <mac-repo> status --short && git -C <mac-repo> log -1 --oneline
+    cat unity/TennisSim.UnityViewer/ProjectSettings/ProjectVersion.txt
+    cat unity/TennisSim.UnityViewer/Packages/manifest.json
+
+    # Replay preparation, with hash verification. An existing destination only passes when the bytes match.
+    scripts/prepare-unity-replay.sh artifacts/bounce/final/v3-legacy-42.json bounce-v3-legacy-42.json
+    scripts/prepare-unity-replay.sh artifacts/bounce/final/v3-impulse-42.json bounce-v3-impulse-42.json
+
+    export UNITY_EDITOR="/Applications/Unity/Hub/Editor/<installed version>/Unity.app/Contents/MacOS/Unity"
+    export TENNISSIM_CANDIDATE_REPLAY="$PWD/unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/bounce-v3-impulse-42.json"
+    scripts/validate-unity-viewer.sh all
+
+    # Native Mac resimulation of the same record on a second platform. Use the Mac's own SDK on PATH, or set
+    # DOTNET to it, exactly as the existing calibration docs describe.
+    dotnet run --project src/TennisSim.Cli -- resimulate \
+      --input artifacts/bounce/final/v3-impulse-42.json --chunk 137 --out artifacts/mac-v3-impulse-resimulated-42.json
+
+### Expected values
+
+- v3 legacy: final score B 6-0, 27 points, 2,309 events, replay length 611.625 s.
+- v3 impulse: final score B 6-0, 28 points, 2,289 events. Every BallBounced event carries a bounce object with
+  profileId design-unc-v1 and a profileHash equal to the hash of input.surface.profile in the same replay. Some
+  contacts are status SETTLED (resting contact, zero impulse); that is a policy outcome, not a new event kind.
+- The renderer accepts v1, v2 and v3. On screen the ball centre sits at Y = 0.0335 m at a bounce, and the
+  enlarged ball changes only its drawn diameter.
+- The Mac resimulation is NOT required to be byte identical to the Linux hash. Record event kinds and order,
+  the final score, finalRandomState and per-field tolerances (1e-7 relative) only. Cross-platform status for v3
+  stays NOT_TESTED until that comparison exists.
+
+### What to record
+
+Only new results: Editor version, resolved package lock version, EditMode and PlayMode counts and failures,
+loading and full playback of both replays, the controls (pause, restart, speeds, event navigation, seek), the
+screen judgement, and the Mac resimulation comparison. Earlier v1 and v2 sessions are not evidence for v3.

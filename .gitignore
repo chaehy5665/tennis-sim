@@ -18,3 +18,6 @@ unity/TennisSim.UnityViewer/*.sln
 # Local calibration replay copies; original sample fixture stays tracked.
 unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/audit-*.json
 unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/audit-*.json.meta
+# Local v3 bounce replays prepared for the Unity handoff; the tracked golden fixture stays.
+unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/bounce-*.json
+unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/bounce-*.json.meta

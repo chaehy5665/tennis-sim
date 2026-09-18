@@ -69,3 +69,20 @@ The synthetic dataset is regenerated deterministically by:
   that the Unity tests also compile was executed, through tests/TennisSim.ViewerChecks.
 - Candidate visual review, animation, racket and foot contact: NOT_RUN.
 - Cross-platform v3 execution: NOT_TESTED.
+
+
+## Update 2026-09-18
+
+Two additions for cross-platform work:
+
+- scripts/compare-replays.py is the reusable replay comparator the earlier sessions listed as a next step. It
+  reports byte identity, event count and kind order, final score, finalRandomState and input equality, plus
+  numeric leaf differences against atol and rtol (default 1e-7), and exits 0 within tolerance, 1 on differences,
+  2 on usage or file errors. Verified on three cases: the same file (byte identical), the v3 legacy seed-42
+  record against the preserved mvp-2 candidate (0 numeric differences, maxAbsDelta 0.0, only the engine version
+  string differs), and the v3 legacy against the v3 impulse record (200,525 numeric leaves beyond tolerance,
+  structural differences in event count, kind order and RNG state).
+- docs/UNITY_VALIDATION.md now carries the Mac procedure as of commit 02726bc: pull, regenerate both seed-42
+  replays on the Mac, compare hashes with the Linux values, classify any difference with the comparator, then
+  run the Editor checks. Regenerating rather than copying makes the hash comparison itself the cross-platform
+  evidence.

@@ -360,6 +360,43 @@ Test("Segment stats over the whole match agree with match stats", () =>
         Check(half.Points + rest.Points == s.Points && half.Players[1].Winners + rest.Players[1].Winners == s.Players[1].Winners);
     }
 });
+Test("Opponent coach: reads scouting and style, consumes no randomness, re-simulates exactly", () =>
+{
+    MatchRecord Coached(uint seed, PlayerProfile a, Tactic tacticA)
+    {
+        var input = new MatchInput { Seed = seed, Players = new[] { a, PlayerProfile.Preset("baseline", "B") }, Tactics = new[] { tacticA, new Tactic() } };
+        var engine = new MatchEngine(input); int from = 1;
+        while (engine.AdvanceToChangeover())
+        {
+            var state = engine.State; int to = state.Score.PointsPlayed; uint before = engine.Record.FinalRandomState;
+            string snapshot = ReplayJson.Serialize(engine.Record);
+            var decision = OpponentCoach.Decide(1, engine.Record, from, to, state.Tactics, input.Players);
+            Check(ReplayJson.Serialize(engine.Record) == snapshot, "Decide must not mutate the record");
+            if (decision != null) engine.QueueTactics(1, decision);
+            from = to + 1;
+        }
+        return engine.Record;
+    }
+    var baseline = PlayerProfile.Preset("baseline", "A");
+    var strong = PlayerProfile.Preset("baseline", "A");
+    (strong.ForehandPower, strong.BackhandPower, strong.ForehandControl, strong.BackhandControl) = (strong.BackhandPower, strong.ForehandPower, strong.BackhandControl, strong.ForehandControl);
+    var r = Coached(5, baseline, new Tactic { Aggression = Aggression.Safe });
+    var first = r.InstructionHistory.First(i => i.Player == 1).Value;
+    Check(first.Aggression == Aggression.Aggressive, "attacks a Safe opponent");
+    Check(first.Target == TargetStyle.TargetBackhand, "scouting: baseline backhand is weaker");
+    var s2 = Coached(5, strong, new Tactic { Aggression = Aggression.Aggressive });
+    var firstStrong = s2.InstructionHistory.FirstOrDefault(i => i.Player == 1)?.Value ?? new Tactic();
+    Check(firstStrong.Target == TargetStyle.Balanced && firstStrong.Aggression == Aggression.Balanced, "no backhand targeting against a strong backhand; balanced against aggression");
+    Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Coached(5, baseline, new Tactic { Aggression = Aggression.Safe })), "deterministic");
+    Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Run(5, 137, r.Input)), "AI-coached replay re-simulates from its recorded instructions");
+});
+Test("Segment energy is the recorded energy after the last point of the range", () =>
+{
+    var r = Run(42); var last = r.Events.Last(e => e.Kind == "PointEnded" && e.Point == 10);
+    var s = SegmentStats.Compute(r, 1, 10);
+    for (int i = 0; i < 2; i++) { Check(s.Players[i].EnergyAtEnd == last.State.Players[i].Energy); Check(s.Players[i].EnergyAtEnd >= .15 && s.Players[i].EnergyAtEnd <= 1); }
+    Check(SegmentStats.Compute(r, 10000, 10001).Players.All(p => p.EnergyAtEnd == -1), "empty range has no energy");
+});
 Test("Coaching commands parse settings and reject unknown ones", () =>
 {
     Check(Coach.TryParse("t=backhand a=safe s=t", new Tactic(), out var t, out _) && t.Target == TargetStyle.TargetBackhand && t.Aggression == Aggression.Safe && t.Serve == ServeDirection.T);

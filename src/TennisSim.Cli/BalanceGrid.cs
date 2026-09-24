@@ -13,10 +13,10 @@ public static class BalanceGrid
         Dictionary<string, int> EndReasons, int RallyLimits, int Failures);
 
     public const int RunPoints = 10;
-    static readonly string[] Presets = { "baseline", "server", "defender" };
+    internal static readonly string[] Presets = { "baseline", "server", "defender" };
     // Baseline with forehand and backhand swapped: targeting the backhand should not pay against this player.
-    static readonly string[] Opponents = { "baseline", "server", "defender", "strong-backhand" };
-    static PlayerProfile Player(string name, string id)
+    internal static readonly string[] Opponents = { "baseline", "server", "defender", "strong-backhand" };
+    internal static PlayerProfile Player(string name, string id)
     {
         if (name != "strong-backhand") return PlayerProfile.Preset(name, id);
         var p = PlayerProfile.Preset("baseline", id); p.Name = "StrongBackhand";
@@ -24,7 +24,7 @@ public static class BalanceGrid
         (p.ForehandControl, p.BackhandControl) = (p.BackhandControl, p.ForehandControl);
         return p;
     }
-    static readonly (string Name, Tactic Value)[] Rally =
+    internal static readonly (string Name, Tactic Value)[] Rally =
     {
         ("safe", new Tactic { Aggression = Aggression.Safe }),
         ("balanced", new Tactic()),
@@ -33,7 +33,7 @@ public static class BalanceGrid
         ("backhand", new Tactic { Target = TargetStyle.TargetBackhand }),
         ("backhand-aggressive", new Tactic { Target = TargetStyle.TargetBackhand, Aggression = Aggression.Aggressive }),
     };
-    static readonly (string Name, Tactic Value)[] Serves =
+    internal static readonly (string Name, Tactic Value)[] Serves =
     {
         ("serve-wide", new Tactic { Serve = ServeDirection.Wide }),
         ("serve-body", new Tactic { Serve = ServeDirection.Body }),

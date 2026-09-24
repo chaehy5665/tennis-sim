@@ -29,7 +29,8 @@
 |---|---|---|
 | 결정 시점 | 홀수 게임 뒤 코트 체인지 때 (실제 테니스 리듬과 일치, 결정 간격 약 2게임) | ✅ `MatchEngine.AdvanceToChangeover()`가 엔드 교대 직후 멈춤. `QueueTactics`로 준 지시는 다음 포인트부터 적용되고 replay에 기록됨 |
 | 결정 내용 | 공격 대상(균형/백핸드 공략), 공격성(안전/균형/공격), 서브 방향(혼합/와이드/바디/T) | ✅ `Tactic` |
-| 결정 근거 | 직전 구간 통계: 첫 서브 성공률, 상대 백핸드 에러, 랠리 길이, 체력 | ✅ `SegmentStats.Compute(record, from, to)`: 득점, 서브 득점, 첫 서브, 더블 폴트, 위너, 포핸드/백핸드 에러와 타수, 평균 랠리. 체력은 아직 표시 안 함 |
+| 결정 근거 | 직전 구간 통계: 첫 서브 성공률, 상대 백핸드 에러, 랠리 길이, 체력 | ✅ `SegmentStats.Compute(record, from, to)`: 득점, 서브 득점, 첫 서브, 더블 폴트, 위너, 포핸드/백핸드 에러와 타수, 평균 랠리, 구간 끝 체력 |
+| 상대의 대응 | 상대 코치도 체인지오버마다 전술을 바꿈 | ✅ `OpponentCoach.Decide`: 사람 코치와 같은 정보(프로필, 양쪽 현재 전술, 구간·누적 통계)만 사용, 난수 미사용, 지시는 replay에 기록 |
 | 피드백 | 지시 후 몇 포인트 안에 선택 샷 분포와 결과가 달라지는 것이 보여야 함 | ◐ `Choices`, `CandidateRejections` 기록은 있음. 표시 UI 없음 |
 
 **위험 (측정됨)**: [BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md)에 따르면 현재 전술 공간은 "백핸드 공략 + Wide 서브,
@@ -99,7 +100,8 @@ D1 때문에 선수 여러 명 사이의 자원 배분이 없다. 따라서 매�
 
 슬라이스를 플레이해 보고 **체인지오버 결정이 재미있는지** 판단한 뒤에 매크로 루프와 3D 연출에 투자한다.
 
-UI 전에 판단할 수 있도록 텍스트 프로토타입이 있다. 상대(B)는 초기 전술을 유지한다.
+UI 전에 판단할 수 있도록 텍스트 프로토타입이 있다. 상대(B)는 기본적으로 `OpponentCoach`가 코칭하고,
+`--opponent fixed`면 초기 전술을 유지한다. UI 와이어프레임: https://claude.ai/artifact/GshzaRGoUCtLYDMyZMayU6 (비공개).
 
 ```bash
 dotnet run --project src/TennisSim.Cli --no-build -- coach --seed 42 --player-b defender --out artifacts/coached.json

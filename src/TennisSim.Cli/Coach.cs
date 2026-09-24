@@ -4,21 +4,25 @@ namespace TennisSim.Cli;
 
 // Text prototype of the coaching loop: the user coaches player A, the match pauses at every changeover, shows the
 // games since the previous changeover and takes a tactic change. Instructions go through MatchEngine.QueueTactics,
-// so the saved replay records them and resimulates exactly. Player B keeps its initial tactic.
+// so the saved replay records them and resimulates exactly. Player B is coached by OpponentCoach unless fixed.
 public static class Coach
 {
-    public static MatchRecord Run(MatchInput input, TextReader commands, TextWriter output, bool echo)
+    public static MatchRecord Run(MatchInput input, TextReader commands, TextWriter output, bool echo, bool adaptiveOpponent = true)
     {
         var engine = new MatchEngine(input);
         var names = input.Players.Select(p => p.Name).ToArray();
         output.WriteLine($"You coach A ({names[0]}) against B ({names[1]}). One set. Seed {input.Seed}.");
         output.WriteLine("At each changeover enter a tactic change, e.g. \"t=backhand a=safe s=wide\", or press Enter to keep it.");
         output.WriteLine("t=balanced|backhand   a=safe|balanced|aggressive   s=mixed|wide|body|t   q=keep for the rest of the match");
+        output.WriteLine(adaptiveOpponent ? "B's coach adjusts at each changeover too." : "B keeps its initial tactic.");
         int from = 1; bool auto = false;
         while (engine.AdvanceToChangeover())
         {
             var state = engine.State;
             int to = state.Score.PointsPlayed;
+            // The opponent decides from the same view before the user answers, and the user sees the change.
+            var opponent = adaptiveOpponent ? OpponentCoach.Decide(1, engine.Record, from, to, state.Tactics, input.Players) : null;
+            if (opponent != null) { engine.QueueTactics(1, opponent); if (!auto) output.WriteLine($"\n  B's coach changes to {Describe(opponent)} from the next point"); }
             if (!auto)
             {
                 Report(output, SegmentStats.Compute(engine.Record, from, to), state, names);
@@ -65,6 +69,7 @@ public static class Coach
         o.WriteLine(Row("Winners", p => p.Winners.ToString()));
         o.WriteLine(Row("Errors FH/BH", p => $"{p.ForehandErrors}/{p.BackhandErrors}"));
         o.WriteLine(Row("Strokes FH/BH", p => $"{p.Forehands}/{p.Backhands}"));
+        o.WriteLine(Row("Energy", p => p.EnergyAtEnd < 0 ? "-" : p.EnergyAtEnd.ToString("F2")));
         o.WriteLine($"Mean rally length {s.MeanRallyLength:F1} shots");
         if (!whole) o.WriteLine($"Your tactic: {Describe(state.Tactics[0])}   Opponent: {Describe(state.Tactics[1])}");
     }
@@ -90,5 +95,44 @@ public static class Coach
             }
         }
         return true;
+    }
+
+    // Full sets per condition: A keeps one fixed tactic; B is either fixed on Balanced or coached by OpponentCoach.
+    // Both B modes replay the same seeds, so the comparison is paired.
+    public sealed record EvalRow(string PlayerA, string PlayerB, string TacticA, int Sets, int FixedSetsB, int AdaptiveSetsB,
+        int FixedPointsB, int FixedPoints, int AdaptivePointsB, int AdaptivePoints, int AdaptiveChanges, int Failures);
+
+    public static List<EvalRow> Evaluate(int sets, uint seed)
+    {
+        var jobs = new List<(string A, string B, string Name, Tactic Tactic)>();
+        foreach (var a in BalanceGrid.Presets) foreach (var b in BalanceGrid.Opponents) foreach (var t in BalanceGrid.Rally.Concat(BalanceGrid.Serves)) jobs.Add((a, b, t.Name, t.Value));
+        var rows = new EvalRow[jobs.Count];
+        Parallel.For(0, jobs.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, j =>
+        {
+            var job = jobs[j];
+            int fixedSets = 0, adaptiveSets = 0, fixedB = 0, fixedN = 0, adaptiveB = 0, adaptiveN = 0, changes = 0, failures = 0;
+            for (int i = 0; i < sets; i++)
+            {
+                foreach (bool adaptive in new[] { false, true })
+                {
+                    var input = new MatchInput { Seed = unchecked(seed + (uint)i), Players = new[] { BalanceGrid.Player(job.A, "A"), BalanceGrid.Player(job.B, "B") }, Tactics = new[] { job.Tactic.Copy(), new Tactic() } };
+                    input.Config.FirstServer = i % 2; input.Config.InitialEndA = (i / 2) % 2 == 0 ? -1 : 1;
+                    var engine = new MatchEngine(input); int from = 1;
+                    while (engine.AdvanceToChangeover())
+                    {
+                        var state = engine.State; int to = state.Score.PointsPlayed;
+                        var decision = adaptive ? OpponentCoach.Decide(1, engine.Record, from, to, state.Tactics, input.Players) : null;
+                        if (decision != null) { engine.QueueTactics(1, decision); changes++; }
+                        from = to + 1;
+                    }
+                    var r = engine.Record;
+                    if (r.Status != "Completed") { failures++; continue; }
+                    int won = r.Stats.Players[1].PointsWon, n = r.FinalScore.PointsPlayed; bool setB = r.FinalScore.Winner == 1;
+                    if (adaptive) { adaptiveB += won; adaptiveN += n; if (setB) adaptiveSets++; } else { fixedB += won; fixedN += n; if (setB) fixedSets++; }
+                }
+            }
+            rows[j] = new EvalRow(job.A, job.B, job.Name, sets, fixedSets, adaptiveSets, fixedB, fixedN, adaptiveB, adaptiveN, changes, failures);
+        });
+        return rows.ToList();
     }
 }

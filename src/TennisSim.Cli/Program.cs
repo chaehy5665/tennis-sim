@@ -8,7 +8,7 @@ catch (Exception ex) when (ex is ArgumentException or IOException or System.Text
 
 internal static class Cli
 {
-    private static readonly HashSet<string> Known = new() { "seed", "player-a", "player-b", "tactics-a", "tactics-b", "instructions", "config", "out", "quiet", "chunk", "seeds", "count", "input", "source-id", "surface-model", "profile", "ball", "ball-condition", "script" };
+    private static readonly HashSet<string> Known = new() { "seed", "player-a", "player-b", "tactics-a", "tactics-b", "instructions", "config", "out", "quiet", "chunk", "seeds", "count", "input", "source-id", "surface-model", "profile", "ball", "ball-condition", "script", "opponent", "sets" };
     public static int Run(string[] args)
     {
         if (args.Length == 0 || args[0] is "help" or "--help")
@@ -17,7 +17,8 @@ internal static class Cli
                 "match --seed 42 --player-a baseline --player-b defender --tactics-a backhand --out artifacts/match.json\n" +
                 "compare --seeds 11,22,33,44,55 --out artifacts/comparison.json\npoints --count 1000 --seed 100 --out artifacts/points.json\n" +
                 "balance --count 2000 --seed 100 --out artifacts/balance.json\n" +
-                "coach --seed 42 --player-b defender --out artifacts/coached.json [--script commands.txt]\n" +
+                "coach --seed 42 --player-b defender --out artifacts/coached.json [--script commands.txt] [--opponent adaptive|fixed]\n" +
+                "coach-eval --sets 20 --seed 100 --out artifacts/coach-eval.json\n" +
                 "bounce --input impact.json --surface-model impulse --profile profiles/pair.json --out artifacts/bounce.json\n" +
                 "diagnose --input artifacts/match.json --out artifacts/audit.json --source-id SOURCE\nscenarios --out artifacts/scenarios.json\n" +
                 "replay --input artifacts/match.json\nresimulate --input artifacts/match.json --out artifacts/resimulated.json\n" +
@@ -80,9 +81,23 @@ internal static class Cli
                 // Interactive by default; --script replays one command line per changeover for tests and demos.
                 bool scripted = options.TryGetValue("script", out var script);
                 using var reader = scripted ? new StreamReader(script!) : null;
-                var record = Coach.Run(Input(options), reader ?? Console.In, Console.Out, scripted);
+                string opponent = Get("opponent", "adaptive");
+                if (opponent != "adaptive" && opponent != "fixed") throw new ArgumentException("opponent must be adaptive or fixed");
+                var record = Coach.Run(Input(options), reader ?? Console.In, Console.Out, scripted, opponent == "adaptive");
                 if (options.TryGetValue("out", out var path)) { ReplayJson.Save(path, record); Console.WriteLine("REPLAY_FILE=" + Path.GetFullPath(path)); }
                 return record.Status == "Completed" ? 0 : 1;
+            }
+            case "coach-eval":
+            {
+                int sets = int.Parse(Get("sets", "20")); if (sets < 1 || sets > 10000) throw new ArgumentException("sets must be 1..10000");
+                uint seed = uint.Parse(Get("seed", "100"));
+                var rows = Coach.Evaluate(sets, seed);
+                ReplayJson.Save(Get("out", "artifacts/coach-eval.json"), new { schemaVersion = "1.0", realismCalibrated = false, engineVersion = new MatchRecord().EngineVersion, sets, initialSeed = seed, seedRule = "set i uses initialSeed+i for both B modes", rows });
+                double Pct(int k, int n) => n == 0 ? 0 : 100.0 * k / n;
+                Console.WriteLine($"COACH_EVAL conditions={rows.Count} setsPerMode={sets} failures={rows.Sum(r => r.Failures)}");
+                Console.WriteLine($"B fixed:    sets {rows.Sum(r => r.FixedSetsB)}/{rows.Sum(r => r.Sets)}  points {Pct(rows.Sum(r => r.FixedPointsB), rows.Sum(r => r.FixedPoints)):F1}%");
+                Console.WriteLine($"B adaptive: sets {rows.Sum(r => r.AdaptiveSetsB)}/{rows.Sum(r => r.Sets)}  points {Pct(rows.Sum(r => r.AdaptivePointsB), rows.Sum(r => r.AdaptivePoints)):F1}%  changes {rows.Sum(r => r.AdaptiveChanges)}");
+                return rows.Sum(r => r.Failures) == 0 ? 0 : 1;
             }
             case "replay":
                 Print(ReplayJson.Load(Get("input", "artifacts/match.json")), true); return 0;

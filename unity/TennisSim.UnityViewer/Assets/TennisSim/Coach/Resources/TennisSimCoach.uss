@@ -42,7 +42,7 @@
 .tsc-steps { flex-direction: row; flex-grow: 1; justify-content: center; }
 .tsc-root .tsc-step { padding: 8px 16px; margin-left: 8px; border-radius: 4px; color: var(--net); }
 .tsc-root .tsc-step--current { background-color: var(--selected); color: var(--on-selected); }
-.tsc-panel { background-color: var(--court); border-width: 1px; border-color: var(--control-border); border-radius: 0; padding: 16px; }
+.tsc-panel { flex-shrink: 0; background-color: var(--court); border-width: 1px; border-color: var(--control-border); border-radius: 0; padding: 16px; }
 /* Prefixed so they outrank the text reset above (.tsc-root .unity-text-element { margin: 0 }). */
 .tsc-root .tsc-gap-bottom { margin-bottom: 16px; }
 .tsc-root .tsc-gap-right { margin-right: 32px; }
@@ -73,6 +73,14 @@
 .tsc-button-row { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; margin-left: -8px; margin-top: 8px; }
 .tsc-root .tsc-button-row .tsc-button { margin: 8px 0 0 8px; flex-shrink: 1; max-width: 100%; }
 
+/* Stacked button row (set from C# when the buttons wrap): one column, every button the row's full width. */
+.tsc-button-row--stacked { flex-direction: column; align-items: stretch; margin-left: 0; }
+.tsc-root .tsc-button-row--stacked .tsc-button { margin: 8px 0 0 0; max-width: none; }
+
+/* Content never shrinks when the screen overflows; the body scrolls instead (UI Toolkit defaults flex-shrink to 1). */
+.tsc-card { flex-shrink: 0; }
+.tsc-root .tsc-legend { flex-shrink: 0; margin-top: 4px; }
+
 /* Keyboard focus: ball ring. USS has no outline, so a 2px ball border takes its place and the padding shrinks by
    the border growth so the element keeps its size (chip 1px -> 2px, secondary 1px -> 2px, primary 0 -> 2px).
    A selected chip keeps its selected fill; only the border turns ball. */
@@ -81,15 +89,15 @@
 .tsc-root .tsc-button--primary:focus { border-width: 2px; border-color: var(--ball); padding: 0 30px; }
 
 /* InfoBanner */
-.tsc-banner { flex-direction: row; background-color: var(--info-surface); border-width: 1px; border-color: var(--info-border); border-radius: 0; padding: 16px; }
+.tsc-banner { flex-shrink: 0; flex-direction: row; background-color: var(--info-surface); border-width: 1px; border-color: var(--info-border); border-radius: 0; padding: 16px; }
 .tsc-root .tsc-banner__icon { font-size: 12px; width: 22px; height: 22px; border-radius: 11px; border-width: 1.5px; border-color: var(--info-border); color: var(--line-muted); -unity-text-align: middle-center; margin-right: 16px; flex-shrink: 0; }
 
 /* Inset: a ground surface inside a court panel (coach memo, change summary, segment card, heatmap). */
-.tsc-inset { background-color: var(--ground); border-radius: 0; padding: 16px; }
+.tsc-inset { flex-shrink: 0; background-color: var(--ground); border-radius: 0; padding: 16px; }
 .tsc-inset--compact { padding: 8px; }
 .tsc-root .tsc-inset__kicker { margin-bottom: 4px; }
 
 /* Tables */
-.tsc-table-row { flex-direction: row; border-top-width: 1px; border-color: var(--net); padding-top: 6px; padding-bottom: 6px; }
+.tsc-table-row { flex-shrink: 0; min-height: 32px; align-items: center; flex-direction: row; border-top-width: 1px; border-color: var(--net); padding-top: 6px; padding-bottom: 6px; }
 .tsc-root .tsc-cell { width: 80px; -unity-text-align: middle-right; }
 .tsc-root .tsc-cell--label { flex-grow: 1; -unity-text-align: middle-left; }

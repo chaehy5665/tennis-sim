@@ -131,7 +131,24 @@ namespace TennisSim.Coach
         // Token values from TennisSimCoach.uss for the few styles set in code.
         static Color Hex(string html) { ColorUtility.TryParseHtmlString(html, out var c); return c; }
         // Buttons wrap onto further lines, right aligned with space-2 between them, and never leave their container.
-        static VisualElement ButtonRow(params Button[] buttons) { var r = Box("tsc-button-row"); foreach (var b in buttons) r.Add(b); return r; }
+        // When the buttons wrap, the row switches to a stacked column where every button takes the row's full width.
+        // USS cannot see wrapping, so it is detected from layout; the natural width decides when to unstack again.
+        static VisualElement ButtonRow(params Button[] buttons)
+        {
+            var r = Box("tsc-button-row");
+            foreach (var b in buttons) r.Add(b);
+            float natural = 0;
+            r.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                if (!r.ClassListContains("tsc-button-row--stacked"))
+                {
+                    bool wrapped = buttons.Length > 1 && buttons.Any(b => Mathf.Abs(b.layout.y - buttons[0].layout.y) > 1);
+                    if (wrapped) { natural = buttons.Sum(b => b.layout.width + 8); r.AddToClassList("tsc-button-row--stacked"); }
+                }
+                else if (natural > 0 && r.layout.width >= natural) r.RemoveFromClassList("tsc-button-row--stacked");
+            });
+            return r;
+        }
         static VisualElement Row(params VisualElement[] children) { var r = Box("tsc-row"); r.style.alignItems = Align.Center; foreach (var c in children) r.Add(c); return r; }
 
         VisualElement Page(int step)
@@ -144,8 +161,16 @@ namespace TennisSim.Coach
             header.Add(steps);
             header.Add(Text("Seed " + Seed + " · 1세트 · 하드코트", "tsc-label", "tsc-on-ground-muted"));
             Root.Add(header);
+            // The body scrolls vertically; the header stays. The body is at least one viewport tall so flex-grow
+            // children (the match court, the review columns) still fill the screen when the content is shorter.
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scroll.style.flexGrow = 1;
             screen = Box("tsc-screen");
-            Root.Add(screen);
+            var body = screen;
+            scroll.contentViewport.RegisterCallback<GeometryChangedEvent>(e => body.style.minHeight = e.newRect.height);
+            scroll.Add(screen);
+            Root.Add(scroll);
             return screen;
         }
 
@@ -356,7 +381,8 @@ namespace TennisSim.Coach
             table.Add(Text(v.RallyNote, "tsc-body", "tsc-muted"));
             main.Add(table);
             var notes = Box("tsc-row"); notes.style.marginTop = 16;
-            foreach (var o in v.Observations) { var card = Box("tsc-panel", "tsc-grow"); card.style.marginRight = 16; card.Add(Text(o, "tsc-body")); notes.Add(card); }
+            // Basis 0: the cards share the row width equally and wrap their text instead of taking its unwrapped width.
+            foreach (var o in v.Observations) { var card = Box("tsc-panel", "tsc-grow"); card.style.flexBasis = 0; card.style.marginRight = 16; card.Add(Text(o, "tsc-body")); notes.Add(card); }
             main.Add(notes);
 
             var side = Box("tsc-panel"); side.style.width = 360;
@@ -407,38 +433,39 @@ namespace TennisSim.Coach
             var page = Page(3);
             var v = CoachViews.Review(Session);
             var top = Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true), Box("tsc-grow"),
-                MakeButton("같은 seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true));
+                ButtonRow(MakeButton("같은 seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true)));
             page.Add(Text("경기 리뷰 · " + v.Points + "포인트 · " + (v.Winner == 0 ? "승리" : "패배"), "tsc-label", "tsc-on-ground-muted"));
             page.Add(top);
 
             var timeline = Box("tsc-panel"); timeline.style.marginTop = 16; timeline.style.marginBottom = 16;
-            timeline.Add(Text("전술 구간별 흐름 · 아래 줄은 게임 승자", "tsc-label", "tsc-gap-bottom"));
-            int games = Math.Max(1, v.GameWinners.Count);
+            timeline.Add(Text("전술 구간별 흐름 · 카드 아래는 게임별 승자", "tsc-label", "tsc-gap-bottom"));
             // Segment cards share one minimum width and one height; longer segments grow wider, and cards that do not
             // fit wrap to the next line instead of shrinking.
-            var segRow = Box("tsc-row"); segRow.style.flexWrap = Wrap.Wrap; segRow.style.marginLeft = segRow.style.marginRight = -4;
+            // align-content flex-start: wrapped lines keep their content height instead of stretching to the parent.
+            var segRow = Box("tsc-row"); segRow.style.flexWrap = Wrap.Wrap; segRow.style.alignContent = Align.FlexStart; segRow.style.marginLeft = segRow.style.marginRight = -4;
             foreach (var s in v.Segments)
             {
                 int span = Math.Max(1, s.LastGame - s.FirstGame + 1);
-                var cell = Box(); cell.style.flexGrow = span; cell.style.flexBasis = 0; cell.style.minWidth = 180; cell.style.paddingLeft = cell.style.paddingRight = 4; cell.style.marginBottom = 8;
+                var cell = Box("tsc-card"); cell.style.flexGrow = span; cell.style.flexBasis = 0; cell.style.minWidth = 180; cell.style.paddingLeft = cell.style.paddingRight = 4; cell.style.marginBottom = 8;
                 var inner = Box("tsc-inset", "tsc-inset--compact"); inner.style.flexGrow = 1;
                 inner.Add(Text(s.Games, "tsc-label"));
                 inner.Add(Text("A " + s.TacticA, "tsc-body"));
                 inner.Add(Text("B " + s.TacticB, "tsc-body", "tsc-muted"));
                 inner.Add(Number("A " + s.Won + "/" + s.Points, "tsc-stat"));
+                // Game winners live inside their segment card, so they stay aligned when cards wrap.
+                var winners = Box("tsc-row"); winners.style.flexWrap = Wrap.Wrap; winners.style.marginTop = 8;
+                for (int g = s.FirstGame; g <= s.LastGame && g <= v.GameWinners.Count; g++)
+                {
+                    int w = v.GameWinners[g - 1];
+                    var chip = Text(g + " " + v.Names[w], "tsc-label", "tsc-badge", w == 0 ? "tsc-badge--a" : "tsc-badge--b");
+                    chip.style.borderTopLeftRadius = chip.style.borderTopRightRadius = chip.style.borderBottomLeftRadius = chip.style.borderBottomRightRadius = 4;
+                    chip.style.marginTop = 4;
+                    winners.Add(chip);
+                }
+                inner.Add(winners);
                 cell.Add(inner); segRow.Add(cell);
             }
             timeline.Add(segRow);
-            var gameRow = Box("tsc-row"); gameRow.style.marginTop = 8;
-            for (int i = 0; i < v.GameWinners.Count; i++)
-            {
-                int w = v.GameWinners[i];
-                var cell = Box(); cell.style.width = Length.Percent(100f / games); cell.style.paddingLeft = cell.style.paddingRight = 4;
-                var chip = Text((i + 1) + " " + v.Names[w], "tsc-label", "tsc-badge", w == 0 ? "tsc-badge--a" : "tsc-badge--b");
-                chip.style.borderTopLeftRadius = chip.style.borderTopRightRadius = chip.style.borderBottomLeftRadius = chip.style.borderBottomRightRadius = 4; chip.style.height = 32; chip.style.marginRight = 0;
-                cell.Add(chip); gameRow.Add(cell);
-            }
-            timeline.Add(gameRow);
             page.Add(timeline);
 
             var columns = Box("tsc-row", "tsc-grow"); columns.style.alignItems = Align.Stretch;
@@ -447,9 +474,9 @@ namespace TennisSim.Coach
             // Fills the panel height; draws the whole half court (net to beyond the baseline and sidelines) letterboxed.
             var half = new HalfCourtView(v.Landings); half.AddToClassList("tsc-inset"); half.AddToClassList("tsc-inset--compact"); half.style.flexGrow = 1; half.style.minHeight = 200; half.style.marginBottom = 8;
             map.Add(half);
-            map.Add(Text("주황 채움 = 백핸드 쪽 샷 " + v.BackhandTargets + "구 · 회색 빈 원 = 그 외", "tsc-body", "tsc-muted"));
-            map.Add(Text("흰 빈 원 = 아웃 " + v.Outs + "구", "tsc-body", "tsc-muted"));
-            var table = Box("tsc-panel", "tsc-grow");
+            map.Add(Text("주황 채움 = 백핸드 쪽 샷 " + v.BackhandTargets + "구 · 회색 빈 원 = 그 외", "tsc-body", "tsc-muted", "tsc-legend"));
+            map.Add(Text("흰 빈 원 = 아웃 " + v.Outs + "구", "tsc-body", "tsc-muted", "tsc-legend"));
+            var table = Box("tsc-panel", "tsc-grow"); table.style.flexBasis = 0;
             table.Add(Text("경기 전체 기록", "tsc-label", "tsc-gap-bottom"));
             table.Add(StatHeader(v.Names, false));
             foreach (var r in v.Summary) table.Add(StatLine(r, false));

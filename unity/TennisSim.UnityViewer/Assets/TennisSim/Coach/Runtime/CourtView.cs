@@ -65,11 +65,12 @@ namespace TennisSim.Coach
         }
     }
 
-    // Live top view, court length horizontal. Z spans ±17 m (players stand well behind the baseline), X spans ±5.5 m.
+    // Live top view, court length horizontal. Z spans ±16.5 m (players have been recorded 3.7 m behind the baseline),
+    // X spans ±5.5 m. The range scales with the view, keeping proportions, inside a space-3 edge margin.
     public sealed class CourtView : VisualElement
     {
         MatchView view;
-        const float SpanZ = 17f, SpanX = 5.5f;
+        const float SpanZ = 16.5f, SpanX = 5.5f, Margin = 16f;
 
         public CourtView() { generateVisualContent += Draw; }
         public void Set(MatchView v) { view = v; MarkDirtyRepaint(); }
@@ -82,7 +83,8 @@ namespace TennisSim.Coach
             if (full.width <= 0 || full.height <= 0) return;
             var p = ctx.painter2D;
             CourtPaint.Fill(p, full, CourtPaint.Court);
-            var r = CourtPaint.Fit(full, 2 * SpanZ, 2 * SpanX);
+            var inner = new Rect(full.x + Margin, full.y + Margin, Mathf.Max(1, full.width - 2 * Margin), Mathf.Max(1, full.height - 2 * Margin));
+            var r = CourtPaint.Fit(inner, 2 * SpanZ, 2 * SpanX);
             float hw = CourtPaint.HalfWidth, hl = CourtPaint.HalfLength, sl = CourtPaint.ServiceLine;
             CourtPaint.Rect(p, Map(-hw, -hl, r), Map(hw, hl, r), CourtPaint.Line, 2);
             CourtPaint.Segment(p, Map(-hw, -sl, r), Map(hw, -sl, r), CourtPaint.Line, 2);

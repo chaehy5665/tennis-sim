@@ -40,6 +40,23 @@ namespace TennisSim.Coach
             return new[] { labels[Math.Min(3, a)], labels[Math.Min(3, b)] };
         }
 
+        // UI Toolkit breaks Korean between any two syllables; Korean text should break only at spaces (keep-all).
+        // A WORD JOINER (U+2060, zero width, present in Pretendard) between a Hangul character and any non-space
+        // neighbour keeps each space-separated word whole. Display only: source strings and Core values are unchanged.
+        public static string KeepAll(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            var sb = new System.Text.StringBuilder(text.Length * 2);
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (i > 0 && !char.IsWhiteSpace(text[i - 1]) && !char.IsWhiteSpace(text[i]) && text[i - 1] != '\u2060' && text[i] != '\u2060' && (IsHangul(text[i - 1]) || IsHangul(text[i])))
+                    sb.Append('\u2060');
+                sb.Append(text[i]);
+            }
+            return sb.ToString();
+        }
+        public static bool IsHangul(char c) => (c >= '\uAC00' && c <= '\uD7A3') || (c >= '\u1100' && c <= '\u11FF') || (c >= '\u3130' && c <= '\u318F');
+
         public static string Ratio(int k, int n) => k.ToString(CultureInfo.InvariantCulture) + "/" + n.ToString(CultureInfo.InvariantCulture);
         public static string Percent(double x) => Math.Round(100 * x).ToString(CultureInfo.InvariantCulture) + "%";
         public static string Fixed(double x, int digits) => x.ToString("F" + digits, CultureInfo.InvariantCulture);

@@ -14,6 +14,12 @@ namespace TennisSim.Coach
         // Singles lines are the engine's outside edges (Court.HalfWidth 4.115, HalfLength 11.885, service line 6.40).
         public const float HalfWidth = 4.115f, HalfLength = 11.885f, ServiceLine = 6.40f;
 
+        // Largest rect with the given aspect inside r, centred: the whole court range stays visible at any size.
+        public static Rect Fit(Rect r, float w, float h)
+        {
+            float s = Mathf.Min(r.width / w, r.height / h), fw = w * s, fh = h * s;
+            return new Rect(r.x + (r.width - fw) / 2, r.y + (r.height - fh) / 2, fw, fh);
+        }
         public static void Segment(Painter2D p, Vector2 a, Vector2 b, Color color, float width)
         {
             p.strokeColor = color; p.lineWidth = width;
@@ -72,10 +78,11 @@ namespace TennisSim.Coach
 
         void Draw(MeshGenerationContext ctx)
         {
-            var r = contentRect;
-            if (r.width <= 0 || r.height <= 0) return;
+            var full = contentRect;
+            if (full.width <= 0 || full.height <= 0) return;
             var p = ctx.painter2D;
-            CourtPaint.Fill(p, r, CourtPaint.Court);
+            CourtPaint.Fill(p, full, CourtPaint.Court);
+            var r = CourtPaint.Fit(full, 2 * SpanZ, 2 * SpanX);
             float hw = CourtPaint.HalfWidth, hl = CourtPaint.HalfLength, sl = CourtPaint.ServiceLine;
             CourtPaint.Rect(p, Map(-hw, -hl, r), Map(hw, hl, r), CourtPaint.Line, 2);
             CourtPaint.Segment(p, Map(-hw, -sl, r), Map(hw, -sl, r), CourtPaint.Line, 2);
@@ -100,28 +107,31 @@ namespace TennisSim.Coach
     {
         readonly List<Landing> landings;
         readonly Color hitter;
-        const float SpanX = 5.5f, SpanZ = 13.5f;
+        // Net to 1.6 m past the baseline and 1.4 m past each sideline, widened when a landing falls further out.
+        readonly float spanX = 5.5f, spanZ = 13.5f;
 
         public HalfCourtView(List<Landing> landings, int player = 0)
         {
             this.landings = landings;
             hitter = player == 0 ? CourtPaint.PlayerA : CourtPaint.PlayerB;
+            foreach (var l in landings) { spanX = Mathf.Max(spanX, Mathf.Abs(l.X) + .5f); spanZ = Mathf.Max(spanZ, l.Z + .5f); }
             generateVisualContent += Draw;
         }
 
-        Vector2 Map(float x, float z, Rect r) => new Vector2(r.xMin + (x + SpanX) / (2 * SpanX) * r.width, r.yMin + (SpanZ - z) / SpanZ * r.height);
+        Vector2 Map(float x, float z, Rect r) => new Vector2(r.xMin + (x + spanX) / (2 * spanX) * r.width, r.yMin + (spanZ - z) / spanZ * r.height);
 
         void Draw(MeshGenerationContext ctx)
         {
-            var r = contentRect;
-            if (r.width <= 0 || r.height <= 0) return;
+            var full = contentRect;
+            if (full.width <= 0 || full.height <= 0) return;
             var p = ctx.painter2D;
+            var r = CourtPaint.Fit(full, 2 * spanX, spanZ);
             CourtPaint.Fill(p, r, CourtPaint.Ground);
             float hw = CourtPaint.HalfWidth, hl = CourtPaint.HalfLength, sl = CourtPaint.ServiceLine;
             CourtPaint.Rect(p, Map(-hw, hl, r), Map(hw, 0, r), CourtPaint.Line, 2);
             CourtPaint.Segment(p, Map(-hw, sl, r), Map(hw, sl, r), CourtPaint.Line, 2);
             CourtPaint.Segment(p, Map(0, sl, r), Map(0, 0, r), CourtPaint.Line, 2);
-            CourtPaint.Segment(p, Map(-SpanX, 0, r), Map(SpanX, 0, r), CourtPaint.Net, 4);
+            CourtPaint.Segment(p, Map(-spanX, 0, r), Map(spanX, 0, r), CourtPaint.Net, 4);
             foreach (var l in landings)
             {
                 var c = Map(l.X, l.Z, r);

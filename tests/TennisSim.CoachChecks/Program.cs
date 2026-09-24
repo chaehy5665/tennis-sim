@@ -146,6 +146,17 @@ Test("Rook is the baseline preset with forehand and backhand swapped", () =>
     var i = CoachMatchup.Input(9); var b = PlayerProfile.Preset("baseline", "B");
     Check(i.Seed == 9 && i.Players[1].Name == "Rook" && i.Players[1].BackhandPower == b.ForehandPower && i.Players[1].ForehandControl == b.BackhandControl);
 });
+Test("Korean words stay whole: word joiners only around Hangul, never at spaces", () =>
+{
+    const char J = '\u2060';
+    Check(CoachText.KeepAll("다음 체인지오버") == "다" + J + "음 체" + J + "인" + J + "지" + J + "오" + J + "버");
+    Check(CoachText.KeepAll("Rook 코치가 23%로") == "Rook 코" + J + "치" + J + "가 23%" + J + "로");
+    Check(CoachText.KeepAll("SEED 3 · 4×") == "SEED 3 · 4×", "no Hangul, unchanged");
+    string once = CoachText.KeepAll("Ember의 백핸드 에러율이 23%로"), twice = CoachText.KeepAll(once);
+    Check(once == twice, "idempotent");
+    Check(once.Replace(J.ToString(), "") == "Ember의 백핸드 에러율이 23%로", "only joiners added");
+    Check(once.Split(' ').Length == 4, "spaces untouched");
+});
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;
 

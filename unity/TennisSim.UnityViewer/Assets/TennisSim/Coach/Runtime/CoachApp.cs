@@ -93,11 +93,13 @@ namespace TennisSim.Coach
         // The label style is uppercase; USS has no text-transform, so the bound string is converted (Korean is unaffected).
         Label Text(string text, params string[] classes)
         {
-            var l = new Label(Array.IndexOf(classes, "tsc-label") >= 0 ? text.ToUpperInvariant() : text);
+            var l = new Label(Display(text, Array.IndexOf(classes, "tsc-label") >= 0));
             foreach (var c in classes) l.AddToClassList(c);
             ApplyFont(l, text, classes);
             return l;
         }
+        // Label text is uppercase (USS has no text-transform); Korean words are kept whole across line breaks.
+        static string Display(string text, bool label) => CoachText.KeepAll(label ? text.ToUpperInvariant() : text);
         static Font LoadFont(string name)
         {
             var font = Resources.Load<Font>("Fonts/" + name);
@@ -109,23 +111,26 @@ namespace TennisSim.Coach
         // which JetBrains Mono lacks.
         void ApplyFont(VisualElement e, string text, IList<string> classes)
         {
-            bool bold = classes.Contains("tsc-headline") || classes.Contains("tsc-title") || classes.Contains("tsc-label") || classes.Contains("tsc-score");
+            bool bold = classes.Contains("tsc-headline") || classes.Contains("tsc-title") || classes.Contains("tsc-label") || classes.Contains("tsc-score") || classes.Contains("tsc-banner__icon");
             bool mono = (classes.Contains("tsc-score") || classes.Contains("tsc-stat")) && !HasHangul(text);
             var font = mono ? (bold ? monoBold : monoMedium) : (bold ? sansBold : sansRegular);
             if (font != null) e.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
         }
-        static bool HasHangul(string text) => text != null && text.Any(c => (c >= '\uAC00' && c <= '\uD7A3') || (c >= '\u1100' && c <= '\u11FF') || (c >= '\u3130' && c <= '\u318F'));
+        static bool HasHangul(string text) => text != null && text.Any(CoachText.IsHangul);
         Label Number(string text, string cls) => Text(text, cls);
-        Label Badge(int player) => Text(player == 0 ? "A" : "B", "tsc-label", "tsc-badge", player == 0 ? "tsc-badge--a" : "tsc-badge--b");
+        // A badge keeps space-2 towards its text neighbour: after a badge by default, before it when it trails the text.
+        Label Badge(int player, bool trailing = false) => Text(player == 0 ? "A" : "B", "tsc-label", "tsc-badge", player == 0 ? "tsc-badge--a" : "tsc-badge--b", trailing ? "tsc-badge--trailing" : "tsc-badge--leading");
         Button MakeButton(string text, Action onClick, bool primary)
         {
-            var b = new Button(onClick) { text = text.ToUpperInvariant() };
+            var b = new Button(onClick) { text = Display(text, true) };
             ApplyFont(b, text, new[] { "tsc-label" });
             b.AddToClassList("tsc-button"); b.AddToClassList(primary ? "tsc-button--primary" : "tsc-button--secondary");
             return b;
         }
         // Token values from TennisSimCoach.uss for the few styles set in code.
         static Color Hex(string html) { ColorUtility.TryParseHtmlString(html, out var c); return c; }
+        // Buttons wrap onto further lines, right aligned with space-2 between them, and never leave their container.
+        static VisualElement ButtonRow(params Button[] buttons) { var r = Box("tsc-button-row"); foreach (var b in buttons) r.Add(b); return r; }
         static VisualElement Row(params VisualElement[] children) { var r = Box("tsc-row"); r.style.alignItems = Align.Center; foreach (var c in children) r.Add(c); return r; }
 
         VisualElement Page(int step)
@@ -181,6 +186,8 @@ namespace TennisSim.Coach
                 group.Add(Text(g.Label, "tsc-label", "tsc-gap-bottom"));
                 var row = Box("tsc-row");
                 row.style.flexWrap = Wrap.Wrap;
+                // Chips carry an 8px right margin; pull the row out by it so the last chip meets the panel padding.
+                row.style.marginRight = -8;
                 foreach (var o in g.Options)
                 {
                     var option = o;
@@ -219,7 +226,7 @@ namespace TennisSim.Coach
             }
             Redraw();
             middle.Add(chips);
-            var start = Row(Box("tsc-grow"), MakeButton("경기 시작", () => StartMatch(), true));
+            var start = ButtonRow(MakeButton("경기 시작", () => StartMatch(), true));
             middle.Add(start);
             columns.Add(left); columns.Add(middle); columns.Add(PlayerPanel(v, 1));
             page.Add(columns);
@@ -246,12 +253,13 @@ namespace TennisSim.Coach
                 board.Add(Row(Badge(i), Text(names[i], "tsc-title"), serveMarks[i], Box("tsc-grow"), gameLabels[i], pointLabels[i]));
             }
             main.Add(board);
-            court = new CourtView(); court.style.height = 260; court.style.marginBottom = 16;
+            // The court takes all vertical space left by the scoreboard and controls; it letterboxes to keep proportions.
+            court = new CourtView(); court.style.flexGrow = 1; court.style.minHeight = 200; court.style.marginBottom = 16;
             main.Add(court);
             var controls = Row();
             controls.style.borderTopWidth = 1; controls.style.borderTopColor = Hex("#8c969e"); controls.style.paddingTop = 16;
             var pause = MakeButton(Paused ? "재생" : "일시정지", null, true);
-            pause.clicked += () => { Paused = !Paused; pause.text = (Paused ? "재생" : "일시정지").ToUpperInvariant(); };
+            pause.clicked += () => { Paused = !Paused; pause.text = Display(Paused ? "재생" : "일시정지", true); };
             controls.Add(pause);
             var speeds = Box("tsc-row");
             void DrawSpeeds()
@@ -300,9 +308,9 @@ namespace TennisSim.Coach
                 gameLabels[i].text = v.Games[i].ToString();
                 pointLabels[i].text = v.PointText[i];
                 serveMarks[i].style.visibility = v.Server == i ? Visibility.Visible : Visibility.Hidden;
-                tacticLabels[i].text = v.Tactics[i];
+                tacticLabels[i].text = Display(v.Tactics[i], false);
             }
-            pointInfo.text = "포인트 " + v.Point + " · 게임 " + v.Game + " · " + Speed + "×";
+            pointInfo.text = Display("포인트 " + v.Point + " · 게임 " + v.Game + " · " + Speed + "×", true);
             court.Set(v);
             if (Session.Points.Count != feedCount)
             {
@@ -327,11 +335,12 @@ namespace TennisSim.Coach
             var main = Box("tsc-grow", "tsc-gap-right");
             main.AddToClassList("tsc-changeover");
             main.Add(Text(v.Heading, "tsc-label", "tsc-on-ground-muted"));
-            main.Add(Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1)));
+            main.Add(Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true)));
             if (v.OpponentChanged)
             {
                 var banner = Box("tsc-banner"); banner.style.marginTop = 16;
-                banner.Add(Text("i", "tsc-label", "tsc-banner__icon"));
+                // A symbol, not a label: no uppercase. Size in USS, weight from the Bold file.
+                banner.Add(Text("i", "tsc-banner__icon"));
                 var words = Box("tsc-grow");
                 words.Add(Text(v.OpponentKicker, "tsc-label", "tsc-muted"));
                 words.Add(Text(v.OpponentText, "tsc-body"));
@@ -358,14 +367,14 @@ namespace TennisSim.Coach
             {
                 chips.Clear();
                 chips.Add(Chips(v.Groups, () => pending, t => { pending = t; Redraw(); }, v.CurrentA, false));
-                summary.text = CoachSession.Same(pending, v.CurrentA) ? "변경 없음: " + v.CurrentAText + " 유지" : "변경: " + CoachText.Tactic(pending);
+                summary.text = Display(CoachSession.Same(pending, v.CurrentA) ? "변경 없음: " + v.CurrentAText + " 유지" : "변경: " + CoachText.Tactic(pending), false);
             }
             Redraw();
             side.Add(chips);
             var summaryBox = Box(); summaryBox.style.backgroundColor = Hex("#060b11"); summaryBox.style.paddingTop = summaryBox.style.paddingBottom = summaryBox.style.paddingLeft = summaryBox.style.paddingRight = 8; summaryBox.style.marginTop = 8; summaryBox.style.marginBottom = 16;
             summaryBox.Add(summary);
             side.Add(summaryBox);
-            side.Add(Row(MakeButton("유지하고 계속", () => Resume(null), false), MakeButton("적용하고 계속", () => Resume(pending), true)));
+            side.Add(ButtonRow(MakeButton("유지하고 계속", () => Resume(null), false), MakeButton("적용하고 계속", () => Resume(pending), true)));
             columns.Add(main); columns.Add(side);
             page.Add(columns);
         }
@@ -396,7 +405,7 @@ namespace TennisSim.Coach
             court = null;
             var page = Page(3);
             var v = CoachViews.Review(Session);
-            var top = Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1), Box("tsc-grow"),
+            var top = Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true), Box("tsc-grow"),
                 MakeButton("같은 seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true));
             page.Add(Text("경기 리뷰 · " + v.Points + "포인트 · " + (v.Winner == 0 ? "승리" : "패배"), "tsc-label", "tsc-on-ground-muted"));
             page.Add(top);
@@ -404,12 +413,14 @@ namespace TennisSim.Coach
             var timeline = Box("tsc-panel"); timeline.style.marginTop = 16; timeline.style.marginBottom = 16;
             timeline.Add(Text("전술 구간별 흐름 · 아래 줄은 게임 승자", "tsc-label", "tsc-gap-bottom"));
             int games = Math.Max(1, v.GameWinners.Count);
-            var segRow = Box("tsc-row");
+            // Segment cards share one minimum width and one height; longer segments grow wider, and cards that do not
+            // fit wrap to the next line instead of shrinking.
+            var segRow = Box("tsc-row"); segRow.style.flexWrap = Wrap.Wrap; segRow.style.marginLeft = segRow.style.marginRight = -4;
             foreach (var s in v.Segments)
             {
                 int span = Math.Max(1, s.LastGame - s.FirstGame + 1);
-                var cell = Box(); cell.style.width = Length.Percent(100f * span / games); cell.style.paddingLeft = cell.style.paddingRight = 4;
-                var inner = Box(); inner.style.backgroundColor = Hex("#060b11"); inner.style.paddingTop = inner.style.paddingBottom = inner.style.paddingLeft = inner.style.paddingRight = 8;
+                var cell = Box(); cell.style.flexGrow = span; cell.style.flexBasis = 0; cell.style.minWidth = 180; cell.style.paddingLeft = cell.style.paddingRight = 4; cell.style.marginBottom = 8;
+                var inner = Box(); inner.style.flexGrow = 1; inner.style.backgroundColor = Hex("#060b11"); inner.style.paddingTop = inner.style.paddingBottom = inner.style.paddingLeft = inner.style.paddingRight = 8;
                 inner.Add(Text(s.Games, "tsc-label"));
                 inner.Add(Text("A " + s.TacticA, "tsc-body"));
                 inner.Add(Text("B " + s.TacticB, "tsc-body", "tsc-muted"));
@@ -432,9 +443,10 @@ namespace TennisSim.Coach
             var columns = Box("tsc-row", "tsc-grow"); columns.style.alignItems = Align.Stretch;
             var map = Box("tsc-panel", "tsc-gap-right"); map.style.width = 300;
             map.Add(Text(v.Names[0] + " 랠리 샷 첫 착지 · " + v.Landings.Count + "구", "tsc-label", "tsc-gap-bottom"));
-            var half = new HalfCourtView(v.Landings); half.style.width = 264; half.style.height = 324; half.style.alignSelf = Align.Center;
+            // Fills the panel height; draws the whole half court (net to beyond the baseline and sidelines) letterboxed.
+            var half = new HalfCourtView(v.Landings); half.style.flexGrow = 1; half.style.minHeight = 200; half.style.marginBottom = 8;
             map.Add(half);
-            map.Add(Text("주황 채움 = 백핸드 공략 " + v.BackhandTargets + "구 · 회색 빈 원 = 그 외", "tsc-body", "tsc-muted"));
+            map.Add(Text("주황 채움 = 백핸드 쪽 샷 " + v.BackhandTargets + "구 · 회색 빈 원 = 그 외", "tsc-body", "tsc-muted"));
             map.Add(Text("흰 빈 원 = 아웃 " + v.Outs + "구", "tsc-body", "tsc-muted"));
             var table = Box("tsc-panel", "tsc-grow");
             table.Add(Text("경기 전체 기록", "tsc-label", "tsc-gap-bottom"));

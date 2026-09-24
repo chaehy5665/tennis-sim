@@ -5,11 +5,11 @@
 (https://claude.ai/artifact/7CHzTq4k81XYbUU416mafM, 토큰 v2)을 Unity UI Toolkit으로 옮겼다.
 
 ```text
-IMPLEMENTATION_STATUS: UNITY_VERIFIED_LAYOUT_FIXES_PENDING_RECHECK
-APP_LAYER_CHECKS: PASS (tests/TennisSim.CoachChecks 13/13, C# 9, warnings as errors, actual Core)
+IMPLEMENTATION_STATUS: UNITY_VERIFIED (Mac layout issues closed at 5084857)
+APP_LAYER_CHECKS: PASS (tests/TennisSim.CoachChecks 14/14, C# 9, warnings as errors, actual Core)
 UNITY_COMPILE_RESULT: PASS (Mac, Unity 6000.6.0f1, 2026-09-24, error CS 0)
 UNITY_PLAYMODE_TEST_RESULT: PASS (EditMode 4/4, PlayMode 3/3, validate-unity-viewer.sh all exit 0)
-UNITY_VISUAL_VERIFIED: true at 1280x800 1x for a0a11cd; 2x Retina NOT_RUN; 8 layout issues fixed in 6090fcc, Mac re-check pending
+UNITY_VISUAL_VERIFIED: true at 1280x800 1x and 2560x1600 2x for 5084857; every Mac layout issue closed (see Mac 재확인 경과)
 ```
 
 ## 구조
@@ -85,9 +85,15 @@ Editor에서 처음 열면 새 파일들의 `.meta`가 생성된다. 그 `.meta`
 1. 경기 전: 칩 9개, 선택 반전, 경기 시작.
 2. 경기: 점수판(15/30/40/AD), 코트 위 선수 캡슐과 공, 속도 1×/4×/16×, 일시정지, "다음 체인지오버까지".
 3. 체인지오버: 이번 구간과 누적 표, 체력 줄, 상대 코치 알림(Safe로 시작하면 첫 체인지오버에 나옴), 칩과 두 버튼.
-4. 리뷰: 구간 흐름, 게임 승자 줄, 착지 히트맵과 범례, 전체 기록.
+4. 리뷰: 구간 흐름(카드 안 게임 승자 칩), 착지 히트맵과 범례, 전체 기록.
 5. 한글이 네모로 나오지 않는지, 굵은 글자가 이중으로 굵어지지 않는지, 숫자 자릿수가 맞는지, 1280×800 기준으로
    잘리는 곳이 없는지. 폰트 가져오기 설정이 Dynamic인지.
+
+기준 캡처는 키 입력 없이, 포커스 링이 없는 상태로 찍는다(키 입력이 UI 탐색 이벤트로 들어가 버튼에 포커스가 생긴다).
+2x는 Game 뷰를 2560×1600으로 두고 본다. PanelSettings가 ScaleWithScreenSize(기준 1280×800)라 2x Retina 창과 같은 배율이다.
+
+스크린샷은 `artifacts/unity-visual/<폴더>/`에 저장한다. 이 폴더는 Syncthing(폴더 ID `nnuye-qmgwq`, Mac Send Only,
+Linux Receive Only)으로 Linux 호스트의 같은 경로에 동기화되므로 scp가 필요 없다. `artifacts/`는 gitignore 대상이다.
 
 결과는 이 문서에 새 절로 기록한다. 확인 전에는 위 상태 줄을 바꾸지 않는다.
 
@@ -107,7 +113,7 @@ Unity 6000.6.0f1, Color Space Gamma. Game 뷰 1280×800, 1x(물리 픽셀 1:1). 
   - ScreenCapture PNG에서 잰 여섯 색이 토큰 hex와 정확히 일치한다.
   - 포커스 때 바뀌는 픽셀은 칩 테두리 영역 안에만 있어 크기와 위치가 변하지 않는다. 선택 칩과 primary 버튼 모두 같다.
   - 1px 테두리가 선명하다. 배너, 서브권 점, StepNav, 히트맵(청록 없음, 범례 글자)이 규칙대로 나온다.
-- 스크린샷 6장은 Mac 로컬 `artifacts/unity-visual/coach-20260924-mac/`에 있다(gitignore).
+- 스크린샷 6장은 `artifacts/unity-visual/coach-20260924-mac/`에 있다(gitignore, Linux 호스트에 동기화됨).
 - 확인하지 않은 것: 2x Retina 창.
 
 열린 레이아웃 문제. 디자인 시스템 v10의 unity.md "Mac 확인 기록"과 README "글과 배치"에 규칙이 있고, 수정은 UI
@@ -178,3 +184,20 @@ Unity 6000.6.0f1, Color Space Gamma. Game 뷰 1280×800, 1x(물리 픽셀 1:1). 
   모서리는 4px이다. 가로 스크롤러는 숨긴다. 기본 테마 선택자보다 우선하도록 `.tsc-root` 접두어를 붙였다. 실제로
   적용되는지는 Mac에서 봐야 한다.
 
+## Mac 재확인 경과 (2026-09-24)
+
+모든 재확인은 Unity 6000.6.0f1, Color Space Gamma, 1x(1280×800)와 2x(2560×1600)에서 했다. 매번
+`validate-unity-viewer.sh all`이 exit 0이었다(EditMode 4/4, PlayMode 3/3, 컴파일 오류 0건, font missing 0건). 1x와
+2x의 레이아웃은 매번 픽셀 단위로 같았다(2x = 1x × 2). 스크린샷 폴더는 `artifacts/unity-visual/coach-20260924-mac-<커밋>/`이다.
+
+| 확인한 커밋 | 결과 | 남은 것 |
+|---|---|---|
+| 5593cd1 (c2833b7 포함) | 10개 중 9개 통과. 2x에서 1px 테두리는 물리 2px로 선명하고, 포커스는 물리 4px | 리뷰 화면이 800px을 넘쳐 요소가 눌림 |
+| cb063db | 스크롤, 승자 칩, 표 행 35px, 범례, 코트 뷰 채움 통과 | 구간 카드 둘째 줄이 패널 밖으로 나감. 버튼 줄이 한 번 쌓이면 돌아오지 않음. 코트 그림이 1280×800에서 약 0.7% 작아짐(가로 기준으로 맞춰지는 창에서는 16px 여백이 범위 축소보다 큼) |
+| 6dd5d41 (5fd0578 포함) | 카드 8장이 패널 안에 들어감. 버튼 줄이 쌓였다 돌아오고, 1280×800으로 되돌린 화면이 처음과 픽셀 단위로 같음. 스크롤바 8px, 화살표 없음, #8c969e / hover #aab4bb. 경계에서 깜빡임 없음 | 마지막 줄 카드가 더 넓음(189 대 194/195px). 아주 좁은 폭에서 머리 띠 정보가 단계 탭과 겹침 |
+| e3e5b6d (7ee100c 포함) | 모든 줄 카드 189px. 좁은 폭에서 정보가 통째로 숨고 겹침 없음 | 넓은 폭에서도 정보가 "하드코…"로 말줄임됨. 원래 몇 px 모자랐던 폭이 overflow visible이라 드러나지 않다가 ellipsis로 드러남(두 캡처의 글자 범위가 같음) |
+| 5084857 | 1280×800에서 "Seed 3 · 1세트 · 하드코트"가 다 보임. 말줄임 없이 온전히 보이거나 통째로 숨음. Free Aspect 폭 823px에서 보이고 820px 이하에서 숨음. 깜빡임과 겹침 없음 | 없음 |
+
+체인지오버 버튼이 세로로 쌓이는 경우는 확인 목록에서 뺐다. 오른쪽 패널이 360px로 고정이라 지원하는 창 폭에서는
+쌓이지 않는다. 이 문서의 1~5와 디자인 시스템 확인 항목을 합쳐, Mac에서 나온 코치 UI 문제는 5084857에서 모두 닫혔다.
+디자인 시스템 쪽 기록은 버전 24까지다. 정보가 숨는 경계가 이전보다 약 80px 넓은 것은 기준 폭 1280보다 훨씬 좁은 경우라 그대로 둔다.

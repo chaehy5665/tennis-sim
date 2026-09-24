@@ -67,8 +67,9 @@ Test("Changeover view matches segment statistics and explains the opponent chang
     for (int i = 0; i < views.Count; i++)
     {
         var seg = s.Segments[i]; var stats = SegmentStats.Compute(s.Engine.Record, seg.FromPoint, seg.ToPoint);
-        Check(views[i].Rows[0].A == stats.Players[0].PointsWon.ToString() && views[i].Rows[0].B == stats.Players[1].PointsWon.ToString());
-        Check(views[i].Heading.Contains("포인트 " + seg.FromPoint + "–" + seg.ToPoint));
+        var points = views[i].Compare.Rows.Single(r => r.Label == "득점").Values;
+        Check(points[points.Length / 2 - 1] == stats.Players[0].PointsWon.ToString() && points[points.Length - 1] == stats.Players[1].PointsWon.ToString(), "now columns");
+        Check(views[i].Heading.Contains("포인트 " + seg.FromPoint + "–" + seg.ToPoint + ") · " + stats.Points + "포인트"));
         Check(views[i].OpponentChanged == (seg.OpponentChangeAtEnd != null));
         if (views[i].OpponentChanged) Check(views[i].OpponentText.Contains("→") && views[i].OpponentText.Contains("다음 포인트부터"), views[i].OpponentText);
     }
@@ -164,9 +165,58 @@ Test("Option names never repeat across axes; empty values use the full-width das
     Check(names.Distinct().Count() == names.Count, string.Join(",", names));
     Check(CoachText.Tactic(new Tactic()) == "양쪽 · 균형 · 혼합" && CoachText.Short(new Tactic()) == "양쪽 · 균형 · 혼합");
     var s = Play(3, 0); var views = new List<ChangeoverView>(); Play(3, 0, views);
-    var energy = views[0].Rows.Single(r => r.Label == "체력");
-    Check(energy.MatchA == "—" && energy.MatchB == "—" && CoachText.None == "\u2014");
+    var serve = views[0].Serve.Rows;
+    Check(serve.Any(r => r.Values[0] == "—" && r.Values[1] == "—" && r.Values[2] == "—"), "an unused serve course shows the full-width dash");
+    Check(CoachText.None == "\u2014");
     Check(views[0].Heading.Contains("–"), "ranges keep the short dash");
+});
+Test("Changeover evidence: panels follow the segment stats, previous columns appear after the first changeover", () =>
+{
+    var views = new List<ChangeoverView>(); var s = Play(3, 0, views); var rec = s.Engine.Record;
+    for (int i = 0; i < views.Count; i++)
+    {
+        var v = views[i]; var seg = s.Segments[i]; var now = SegmentStats.Compute(rec, seg.FromPoint, seg.ToPoint);
+        Check(v.HasPrevious == (i > 0) && v.Direction.Split.Count == (i > 0 ? 2 : 1) && v.Compare.Columns.Length == (i > 0 ? 4 : 2), "previous columns");
+        Check(v.Direction.Split[^1].Label == "이번" && (i == 0 || v.Direction.Split[0].Label == "직전"));
+        var me = now.Players[0]; var opp = now.Players[1];
+        var aims = v.Direction.Rows;
+        Check(aims.Select(r => r.Label).SequenceEqual(new[] { "백핸드 쪽", "포핸드 쪽", "그 외" }) && v.Direction.Columns.SequenceEqual(new[] { "타구", "상대 에러", "내 위너" }));
+        Check(aims[0].Values.SequenceEqual(new[] { me.BackhandAim.Shots.ToString(), me.BackhandAim.ReplyErrors.ToString(), me.BackhandAim.Winners.ToString() }), "backhand-side counts");
+        Check(aims[2].Values[0] == me.OtherAim.Shots.ToString() && aims.All(r => r.Muted == (int.Parse(r.Values[0]) < CoachViews.MinShots)), "row muted below 12 shots");
+        int shots = me.BackhandAim.Shots + me.ForehandAim.Shots + me.OtherAim.Shots;
+        Check(v.Direction.Sample == "이번 구간 " + shots + "구" && v.Direction.SampleTag == (shots < CoachViews.MinShots));
+        int n = opp.Forehands + opp.Backhands;
+        Check(n == 0 || v.Direction.Split[^1].LeftText == "백핸드 " + CoachText.Percent((double)opp.Backhands / n) + " · " + opp.Backhands + "/" + n, v.Direction.Split[^1].LeftText);
+        Check(v.Serve.Rows.Select(r => r.Label).SequenceEqual(new[] { "와이드", "바디", "T" }) && v.Serve.Sample == "내 서브 " + me.ServePoints + "포인트");
+        Check(v.Serve.Rows[0].Values[2] == (me.WideServe.Points == 0 ? "—" : me.WideServe.Won + "/" + me.WideServe.Points), "serve ratios as k/n");
+        Check(v.Serve.Rows.All(r => !r.Values.Any(x => x.Contains("%"))), "no percent in serve course");
+        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Count == 7);
+    }
+});
+Test("Change summary names only the changed axes, or what is kept", () =>
+{
+    var current = new Tactic { Aggression = Aggression.Safe };
+    Check(CoachViews.ChangeSummary(current, current.Copy()) == "변경 없음: 양쪽 · 안전 · 혼합 유지");
+    Check(CoachViews.ChangeSummary(current, new Tactic { Aggression = Aggression.Aggressive }) == "공격성 안전 → 공격 · 다음 포인트부터");
+    Check(CoachViews.ChangeSummary(current, new Tactic { Target = TargetStyle.TargetBackhand, Aggression = Aggression.Safe, Serve = ServeDirection.Wide }) == "공격 방향 양쪽 → 백핸드 공략, 서브 혼합 → 와이드 · 다음 포인트부터");
+});
+Test("Review: opponent-coach changes with reasons, landing filters by the tactic in force", () =>
+{
+    var s = Play(3, 0); var r = CoachViews.Review(s);
+    var changes = s.Segments.Where(g => g.OpponentChangeAtEnd != null).ToList();
+    Check(r.OpponentChanges.Count == changes.Count && changes.Count > 0);
+    for (int i = 0; i < changes.Count; i++)
+        Check(r.OpponentChanges[i].Kicker == "게임 " + changes[i].LastGame + " 뒤" && r.OpponentChanges[i].Change.Contains("→") && r.OpponentChanges[i].Reasons.Length > 0);
+    Check(r.LandingFilters[0].Key == "all" && r.LandingFilters.Count == 3, "script uses both attack directions");
+    var bh = CoachViews.Filter(r.Landings, "backhand"); var both = CoachViews.Filter(r.Landings, "balanced");
+    Check(bh.Count + both.Count == r.Landings.Count && bh.Count > 0 && both.Count > 0);
+    Check(bh.Count(l => l.BackhandTarget) * both.Count > both.Count(l => l.BackhandTarget) * bh.Count, "backhand targeting aims more at the backhand side");
+    int k = r.Landings.Count(l => l.BackhandTarget);
+    Check(CoachViews.LandingLegend(r.Landings) == "백핸드 쪽 " + k + "/" + r.Landings.Count + "구 · " + CoachText.Percent((double)k / r.Landings.Count));
+    var fixedOpp = new CoachSession(Input(3), adaptiveOpponent: false); fixedOpp.Start(new Tactic());
+    while (fixedOpp.Phase != CoachPhase.Finished) { if (fixedOpp.Phase == CoachPhase.Changeover) fixedOpp.Resume(null); else fixedOpp.AdvanceToNextStop(); }
+    var rf = CoachViews.Review(fixedOpp);
+    Check(rf.OpponentChanges.Count == 0 && rf.NoOpponentChange == "Rook 코치는 전술을 바꾸지 않았습니다." && rf.LandingFilters.Count == 2);
 });
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;

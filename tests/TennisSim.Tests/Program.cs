@@ -393,6 +393,36 @@ Test("Segment stats over the whole match agree with match stats", () =>
         Check(half.Points + rest.Points == s.Points && half.Players[1].Winners + rest.Players[1].Winners == s.Players[1].Winners);
     }
 });
+Test("Aim and serve-course segment stats: every shot ends once, segments add up to the match", () =>
+{
+    foreach (uint seed in new uint[] { 3, 42 })
+    {
+        var input = new MatchInput { Seed = seed, Tactics = new[] { new Tactic { Target = TargetStyle.TargetBackhand, Serve = ServeDirection.Wide }, new Tactic() } };
+        var r = Run(seed, input: input); int n = r.FinalScore.PointsPlayed;
+        var whole = SegmentStats.Compute(r, 1, n); var a = SegmentStats.Compute(r, 1, n / 2); var b = SegmentStats.Compute(r, n / 2 + 1, n);
+        for (int i = 0; i < 2; i++)
+        {
+            var p = whole.Players[i]; string id = r.Stats.Players[i].PlayerId;
+            Check(p.BackhandAim.Shots + p.ForehandAim.Shots + p.OtherAim.Shots == p.Forehands + p.Backhands, "every rally shot has one aim");
+            foreach (var (aim, name) in new[] { (p.BackhandAim, "Backhand"), (p.ForehandAim, "Forehand"), (p.OtherAim, "") })
+            {
+                Check(aim.Shots == r.Events.Count(e => e.Kind == "BallHit" && e.ShotKind != "Serve" && e.PlayerId == id && (name == "" ? e.Reason != "Backhand" && e.Reason != "Forehand" : e.Reason == name)), "aimed shots from events");
+                Check(aim.Shots == aim.Winners + aim.Errors + aim.ReplyForehands + aim.ReplyBackhands, "each aimed shot ends once");
+                Check(aim.ReplyErrors <= aim.ReplyForehands + aim.ReplyBackhands);
+            }
+            Check(p.WideServe.Points + p.BodyServe.Points + p.TServe.Points == p.ServePoints, "serve courses cover serve points");
+            Check(p.WideServe.Won + p.BodyServe.Won + p.TServe.Won == p.ServePointsWon, "serve courses cover serve points won");
+            Check(p.WideServe.FirstServesIn + p.BodyServe.FirstServesIn + p.TServe.FirstServesIn == p.FirstServesIn, "serve courses cover first serves in");
+            int Sum(Func<SegmentPlayerStats, int> f) => f(a.Players[i]) + f(b.Players[i]);
+            Check(Sum(x => x.BackhandAim.Shots) == p.BackhandAim.Shots && Sum(x => x.ForehandAim.ReplyBackhands) == p.ForehandAim.ReplyBackhands, "aims add up");
+            Check(Sum(x => x.BackhandAim.ReplyErrors) == p.BackhandAim.ReplyErrors && Sum(x => x.OtherAim.Winners) == p.OtherAim.Winners && Sum(x => x.WideServe.Won) == p.WideServe.Won && Sum(x => x.TServe.Points) == p.TServe.Points && Sum(x => x.BodyServe.FirstServesIn) == p.BodyServe.FirstServesIn, "courses add up");
+        }
+        // Engine v5: the receiver plays the aimed side; A targets the backhand, so B mostly replies on the backhand.
+        var aimA = whole.Players[0].BackhandAim;
+        Check(aimA.Shots > 20 && aimA.ReplyBackhands > 0.9 * (aimA.ReplyBackhands + aimA.ReplyForehands), $"aimed side followed: {aimA.ReplyBackhands}/{aimA.ReplyBackhands + aimA.ReplyForehands}");
+        Check(whole.Players[0].WideServe.Points > whole.Players[0].BodyServe.Points + whole.Players[0].TServe.Points, "Wide tactic serves mostly wide");
+    }
+});
 Test("Opponent coach: reads scouting and style, consumes no randomness, re-simulates exactly", () =>
 {
     MatchRecord Coached(uint seed, PlayerProfile a, Tactic tacticA)

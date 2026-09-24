@@ -10,7 +10,22 @@ namespace TennisSim.Coach
     public sealed class TacticGroup { public string Key; public string Label; public List<TacticOption> Options = new List<TacticOption>(); }
     public sealed class StatRow { public string Label; public string A; public string B; public string MatchA; public string MatchB; }
     public sealed class FeedItem { public int Point; public int Winner; public string Text; }
-    public sealed class Landing { public float X; public float Z; public bool BackhandTarget; public bool In; }
+    // BackhandTarget: the shot chose the opponent's backhand side. TacticBackhand: the hitter's tactic at that moment was
+    // TargetBackhand (for the review filter "백핸드 공략일 때" / "양쪽일 때").
+    public sealed class Landing { public float X; public float Z; public bool BackhandTarget; public bool TacticBackhand; public bool In; }
+    public sealed class LandingFilter { public string Key; public string Label; }
+    // Changeover evidence (design system changeover.md). A row's Values follow the panel's Columns; Muted marks a row
+    // whose sample is below its threshold. A SplitRow is one line of the SplitBar: the opponent's backhand share.
+    public sealed class EvidenceRow { public string Label; public string[] Values; public bool Muted; }
+    public sealed class SplitRow { public string Label; public float Backhand; public string LeftText; public string RightText; public bool Muted; }
+    public sealed class EvidencePanel
+    {
+        public string Title; public string Sample; public bool SampleTag;
+        public string[] Columns = new string[0];
+        public List<SplitRow> Split = new List<SplitRow>();
+        public List<EvidenceRow> Rows = new List<EvidenceRow>();
+    }
+    public sealed class OpponentChangeRow { public string Kicker; public string Change; public string Reasons; }
     public sealed class SegmentRow { public string Games; public int FirstGame; public int LastGame; public string TacticA; public string TacticB; public int Won; public int Points; }
 
     public sealed class PreMatchView
@@ -44,12 +59,13 @@ namespace TennisSim.Coach
         public string[] Names;
         public string Heading;
         public int[] Games;
-        public List<StatRow> Rows;
-        public string RallyNote;
         public bool OpponentChanged;
         public string OpponentKicker;
         public string OpponentText;
-        public List<string> Observations;
+        // One evidence panel per tactic axis: attack direction, serve course, and aggression as a segment comparison.
+        // Compare has four columns (A previous, A now, B previous, B now) after the first changeover, else two.
+        public EvidencePanel Direction, Serve, Compare;
+        public bool HasPrevious;
         public Tactic CurrentA;
         public string CurrentAText;
         public string NextChangeover;
@@ -68,6 +84,11 @@ namespace TennisSim.Coach
         public List<Landing> Landings;
         public int BackhandTargets;
         public int Outs;
+        // Each opponent-coach change with the games it followed and its reasons, in match order; NoOpponentChange when
+        // there was none. LandingFilters lists "전체" and each attack-direction tactic actually used.
+        public List<OpponentChangeRow> OpponentChanges;
+        public string NoOpponentChange;
+        public List<LandingFilter> LandingFilters;
     }
 
     public static class CoachViews
@@ -197,8 +218,7 @@ namespace TennisSim.Coach
             var view = new ChangeoverView
             {
                 Names = names, Games = (int[])state.Score.Games.Clone(),
-                Heading = "체인지오버 · " + games + " 구간 (포인트 " + seg.FromPoint + "–" + seg.ToPoint + ")",
-                Rows = Rows(s, m), RallyNote = "이번 구간 평균 랠리 " + CoachText.Fixed(s.MeanRallyLength, 1) + "구 · 체력은 구간 끝 값 (0.15–1)",
+                Heading = "체인지오버 · " + games + " 구간 (포인트 " + seg.FromPoint + "–" + seg.ToPoint + ") · " + s.Points + "포인트",
                 CurrentA = state.Tactics[0].Copy(), CurrentAText = CoachText.Tactic(state.Tactics[0]),
                 NextChangeover = state.Score.TieBreak ? "다음 체인지오버: 6포인트 후" : "다음 체인지오버: 2게임 후",
                 Groups = TacticGroups(false)
@@ -208,22 +228,99 @@ namespace TennisSim.Coach
             {
                 view.OpponentChanged = true;
                 view.OpponentKicker = names[1] + " 코치가 전술을 바꿨습니다";
-                var before = state.Tactics[1];
-                var parts = new List<string>();
-                if (before.Target != change.Tactic.Target) parts.Add("공격 방향 " + CoachText.Target(before.Target) + " → " + CoachText.Target(change.Tactic.Target));
-                if (before.Aggression != change.Tactic.Aggression) parts.Add("공격성 " + CoachText.Aggression(before.Aggression) + " → " + CoachText.Aggression(change.Tactic.Aggression));
-                if (before.Serve != change.Tactic.Serve) parts.Add("서브 " + CoachText.Serve(before.Serve) + " → " + CoachText.Serve(change.Tactic.Serve));
-                view.OpponentText = string.Join(", ", parts) + " (다음 포인트부터). " + string.Join(" ", change.Reasons.Select(r => CoachText.Reason(r, names[0])));
+                view.OpponentText = ChangeParts(state.Tactics[1], change.Tactic) + " (다음 포인트부터). " + ChangeReasons(change, names);
             }
-            var a = s.Players[0]; var b = m.Players[1];
-            view.Observations = new List<string>
-            {
-                "이번 구간 " + names[0] + " 에러 포핸드 " + a.ForehandErrors + ", 백핸드 " + a.BackhandErrors + ".",
-                names[1] + " 누적 에러 포핸드 " + b.ForehandErrors + ", 백핸드 " + b.BackhandErrors + ".",
-                "이번 구간 " + names[0] + " 위너 " + a.Winners + ", 에러 " + (a.ForehandErrors + a.BackhandErrors + a.DoubleFaults) + "."
-            };
+            int prevIndex = session.Segments.Count - 2;
+            var prev = prevIndex >= 0 ? SegmentStats.Compute(session.Engine.Record, session.Segments[prevIndex].FromPoint, session.Segments[prevIndex].ToPoint) : null;
+            view.HasPrevious = prev != null;
+            view.Direction = DirectionPanel(s, prev);
+            view.Serve = ServePanel(s);
+            view.Compare = ComparePanel(s, prev);
             return view;
         }
+
+        // Sample thresholds (design system changeover.md): point-based values under 6 points and shot-based values under
+        // 12 shots (OpponentCoach's minimum strokes) are shown muted, with a "참고용" tag when the whole panel is under.
+        public const int MinPoints = 6, MinShots = 12;
+
+        public static string ChangeParts(Tactic before, Tactic after)
+        {
+            var parts = new List<string>();
+            if (before.Target != after.Target) parts.Add("공격 방향 " + CoachText.Target(before.Target) + " → " + CoachText.Target(after.Target));
+            if (before.Aggression != after.Aggression) parts.Add("공격성 " + CoachText.Aggression(before.Aggression) + " → " + CoachText.Aggression(after.Aggression));
+            if (before.Serve != after.Serve) parts.Add("서브 " + CoachText.Serve(before.Serve) + " → " + CoachText.Serve(after.Serve));
+            return string.Join(", ", parts);
+        }
+        static string ChangeReasons(CoachDecision change, string[] names) => string.Join(" ", change.Reasons.Select(r => CoachText.Reason(r, names[0])));
+
+        static string Count(int k, int n) => n == 0 ? CoachText.None : CoachText.Ratio(k, n);
+
+        static SplitRow Split(string label, SegmentPlayerStats opponent)
+        {
+            int bh = opponent.Backhands, n = opponent.Forehands + opponent.Backhands;
+            if (n == 0) return new SplitRow { Label = label, Backhand = 0, LeftText = "백핸드 " + CoachText.None, RightText = "포핸드 " + CoachText.None, Muted = true };
+            double share = (double)bh / n;
+            return new SplitRow { Label = label, Backhand = (float)share, LeftText = "백핸드 " + CoachText.Percent(share) + " · " + CoachText.Ratio(bh, n), RightText = "포핸드 " + CoachText.Percent(1 - share), Muted = n < MinShots };
+        }
+
+        // Attack direction: where the opponent actually hit from (SplitBar, previous and now) and what my shots aimed at
+        // each side produced this segment, as counts.
+        public static EvidencePanel DirectionPanel(SegmentStats now, SegmentStats prev)
+        {
+            var me = now.Players[0];
+            int shots = me.BackhandAim.Shots + me.ForehandAim.Shots + me.OtherAim.Shots;
+            var panel = new EvidencePanel { Title = "공격 방향", Sample = "이번 구간 " + shots + "구", SampleTag = shots < MinShots, Columns = new[] { "타구", "상대 에러", "내 위너" } };
+            if (prev != null) panel.Split.Add(Split("직전", prev.Players[1]));
+            panel.Split.Add(Split("이번", now.Players[1]));
+            EvidenceRow Aim(string label, AimStats a) => new EvidenceRow { Label = label, Values = new[] { a.Shots.ToString(), a.ReplyErrors.ToString(), a.Winners.ToString() }, Muted = a.Shots < MinShots };
+            panel.Rows.Add(Aim("백핸드 쪽", me.BackhandAim));
+            panel.Rows.Add(Aim("포핸드 쪽", me.ForehandAim));
+            panel.Rows.Add(Aim("그 외", me.OtherAim));
+            return panel;
+        }
+
+        // Serve course: my serve points by the first serve's course. Ratios as k/n, never %; an unused course stays as "—".
+        public static EvidencePanel ServePanel(SegmentStats now)
+        {
+            var me = now.Players[0];
+            var panel = new EvidencePanel { Title = "서브 코스", Sample = "내 서브 " + me.ServePoints + "포인트", SampleTag = me.ServePoints < MinPoints, Columns = new[] { "서브", "첫 서브 성공", "서브 포인트 획득" } };
+            EvidenceRow Course(string label, ServeCourseStats c) => new EvidenceRow
+            {
+                Label = label, Muted = c.Points > 0 && c.Points < MinPoints,
+                Values = new[] { c.Points == 0 ? CoachText.None : c.Points.ToString(), Count(c.FirstServesIn, c.Points), Count(c.Won, c.Points) }
+            };
+            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Wide), me.WideServe));
+            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Body), me.BodyServe));
+            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.T), me.TServe));
+            return panel;
+        }
+
+        // Aggression: this segment beside the previous one for both players (A previous, A now, B previous, B now), or
+        // just the two "now" columns at the first changeover. Match totals belong to the review.
+        public static EvidencePanel ComparePanel(SegmentStats now, SegmentStats prev)
+        {
+            var panel = new EvidencePanel { Title = "공격성 · 구간 비교", Sample = "이번 구간 " + now.Points + "포인트", SampleTag = now.Points < MinPoints };
+            panel.Columns = prev != null ? new[] { "직전", "이번", "직전", "이번" } : new[] { "이번", "이번" };
+            EvidenceRow R(string label, Func<SegmentStats, SegmentPlayerStats, string> f)
+            {
+                var values = prev != null
+                    ? new[] { f(prev, prev.Players[0]), f(now, now.Players[0]), f(prev, prev.Players[1]), f(now, now.Players[1]) }
+                    : new[] { f(now, now.Players[0]), f(now, now.Players[1]) };
+                return new EvidenceRow { Label = label, Values = values };
+            }
+            panel.Rows.Add(R("득점", (x, p) => p.PointsWon.ToString()));
+            panel.Rows.Add(R("서브 포인트 획득", (x, p) => Count(p.ServePointsWon, p.ServePoints)));
+            panel.Rows.Add(R("첫 서브 성공", (x, p) => Count(p.FirstServesIn, p.ServePoints)));
+            panel.Rows.Add(R("위너", (x, p) => p.Winners.ToString()));
+            panel.Rows.Add(R("에러 포핸드/백핸드", (x, p) => p.ForehandErrors + "/" + p.BackhandErrors));
+            panel.Rows.Add(R("평균 랠리", (x, p) => CoachText.Fixed(x.MeanRallyLength, 1)));
+            panel.Rows.Add(R("체력", (x, p) => Energy(p)));
+            return panel;
+        }
+
+        // The change summary under the chips: changed axes only, or what is kept.
+        public static string ChangeSummary(Tactic current, Tactic pending) =>
+            CoachSession.Same(current, pending) ? "변경 없음: " + CoachText.Tactic(current) + " 유지" : ChangeParts(current, pending) + " · 다음 포인트부터";
 
         public static ReviewView Review(CoachSession session)
         {
@@ -253,7 +350,12 @@ namespace TennisSim.Coach
             return new ReviewView
             {
                 Names = names, Games = (int[])record.FinalScore.Games.Clone(), Winner = record.FinalScore.Winner, Points = record.FinalScore.PointsPlayed,
-                Segments = segments, GameWinners = gameWinners, Summary = summary, Landings = Landings(record, 0)
+                Segments = segments, GameWinners = gameWinners, Summary = summary, Landings = Landings(record, 0),
+                OpponentChanges = session.Segments.Where(g => g.OpponentChangeAtEnd != null).Select(g => new OpponentChangeRow
+                {
+                    Kicker = "게임 " + g.LastGame + " 뒤", Change = ChangeParts(g.TacticB, g.OpponentChangeAtEnd.Tactic), Reasons = ChangeReasons(g.OpponentChangeAtEnd, names)
+                }).ToList(),
+                NoOpponentChange = names[1] + " 코치는 전술을 바꾸지 않았습니다."
             }.WithCounts();
         }
 
@@ -261,7 +363,21 @@ namespace TennisSim.Coach
         {
             v.BackhandTargets = v.Landings.Count(l => l.BackhandTarget);
             v.Outs = v.Landings.Count(l => !l.In);
+            // "전체" plus each attack-direction tactic that was actually in force for some shot.
+            v.LandingFilters = new List<LandingFilter> { new LandingFilter { Key = "all", Label = "전체" } };
+            if (v.Landings.Any(l => l.TacticBackhand)) v.LandingFilters.Add(new LandingFilter { Key = "backhand", Label = CoachText.Target(TargetStyle.TargetBackhand) + "일 때" });
+            if (v.Landings.Any(l => !l.TacticBackhand)) v.LandingFilters.Add(new LandingFilter { Key = "balanced", Label = CoachText.Target(TargetStyle.Balanced) + "일 때" });
             return v;
+        }
+
+        public static List<Landing> Filter(List<Landing> landings, string key) =>
+            key == "backhand" ? landings.Where(l => l.TacticBackhand).ToList() : key == "balanced" ? landings.Where(l => !l.TacticBackhand).ToList() : landings;
+
+        // Heatmap legend count line: "백핸드 쪽 28/61구 · 46%".
+        public static string LandingLegend(List<Landing> landings)
+        {
+            int bh = landings.Count(l => l.BackhandTarget), n = landings.Count;
+            return n == 0 ? "백핸드 쪽 " + CoachText.None : "백핸드 쪽 " + CoachText.Ratio(bh, n) + "구 · " + CoachText.Percent((double)bh / n);
         }
 
         // First landings of one player's rally shots (serves excluded), rotated so the opponent's court is always
@@ -282,7 +398,7 @@ namespace TennisSim.Coach
                     result.Add(new Landing
                     {
                         X = (float)(flip ? -p.X : p.X), Z = (float)(flip ? -p.Z : p.Z), BackhandTarget = hit.Reason == "Backhand",
-                        In = Court.SinglesIn(p, receiverEnd)
+                        TacticBackhand = hit.State.Tactics[player].Target == TargetStyle.TargetBackhand, In = Court.SinglesIn(p, receiverEnd)
                     });
                     hit = null;
                 }

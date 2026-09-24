@@ -395,6 +395,7 @@ namespace TennisSim.Coach
             var v = CoachViews.Changeover(Session);
             pending = v.CurrentA.Copy();
             var columns = Box("tsc-row", "tsc-grow"); columns.style.alignItems = Align.Stretch;
+            // Evidence column (design system changeover.md): heading, banner, direction | serve course, segment comparison.
             var main = Box("tsc-grow", "tsc-gap-right");
             main.AddToClassList("tsc-changeover");
             main.Add(Text(v.Heading, "tsc-label", "tsc-on-ground-muted"));
@@ -410,37 +411,90 @@ namespace TennisSim.Coach
                 banner.Add(words);
                 main.Add(banner);
             }
-            var table = Box("tsc-panel"); table.style.marginTop = 16;
-            var head = Row(Text("", "tsc-cell--label"), Text("이번 구간", "tsc-label"), Box("tsc-grow"), Text("경기 누적", "tsc-label"));
-            table.Add(head);
-            table.Add(StatHeader(v.Names, true));
-            foreach (var r in v.Rows) table.Add(StatLine(r, true));
-            table.Add(Text(v.RallyNote, "tsc-body", "tsc-muted"));
-            main.Add(table);
-            var notes = Box("tsc-row"); notes.style.marginTop = 16;
-            // Basis 0: the cards share the row width equally and wrap their text instead of taking its unwrapped width.
-            foreach (var o in v.Observations) { var card = Box("tsc-panel", "tsc-grow"); card.style.flexBasis = 0; card.style.marginRight = 16; card.Add(Text(o, "tsc-body")); notes.Add(card); }
-            main.Add(notes);
+            var pair = Box("tsc-row"); pair.style.marginTop = 16; pair.style.alignItems = Align.Stretch;
+            var direction = EvidenceView(v.Direction); direction.style.flexGrow = 1; direction.style.flexBasis = 0; direction.style.marginRight = 16;
+            var serve = EvidenceView(v.Serve); serve.style.flexGrow = 1; serve.style.flexBasis = 0;
+            pair.Add(direction); pair.Add(serve);
+            main.Add(pair);
+            var compare = EvidenceView(v.Compare, v.Names); compare.style.marginTop = 16;
+            main.Add(compare);
 
             var side = Box("tsc-panel"); side.style.width = 360;
             side.Add(Text("내 전술 변경", "tsc-title"));
             side.Add(Text("다음 포인트부터 적용됩니다. " + v.NextChangeover, "tsc-body", "tsc-muted", "tsc-gap-bottom"));
             var chips = Box();
             var summary = Text("", "tsc-body");
+            var buttons = Box();
+            // Unchanged: one primary "그대로 계속". Changed: secondary "변경 취소" (back to the current tactic) and
+            // primary "적용하고 계속". The primary always continues with the chips as they are.
             void Redraw()
             {
                 chips.Clear();
                 chips.Add(Chips(v.Groups, () => pending, t => { pending = t; Redraw(); }, v.CurrentA, false));
-                summary.text = Display(CoachSession.Same(pending, v.CurrentA) ? "변경 없음: " + v.CurrentAText + " 유지" : "변경: " + CoachText.Tactic(pending), false);
+                summary.text = Display(CoachViews.ChangeSummary(v.CurrentA, pending), false);
+                buttons.Clear();
+                buttons.Add(CoachSession.Same(pending, v.CurrentA)
+                    ? ButtonRow(MakeButton("그대로 계속", () => Resume(null), true))
+                    : ButtonRow(MakeButton("변경 취소", () => { pending = v.CurrentA.Copy(); Redraw(); }, false), MakeButton("적용하고 계속", () => Resume(pending), true)));
             }
             Redraw();
             side.Add(chips);
             var summaryBox = Box("tsc-inset", "tsc-inset--compact"); summaryBox.style.marginTop = 8; summaryBox.style.marginBottom = 16;
             summaryBox.Add(summary);
             side.Add(summaryBox);
-            side.Add(ButtonRow(MakeButton("유지하고 계속", () => Resume(null), false), MakeButton("적용하고 계속", () => Resume(pending), true)));
+            side.Add(buttons);
             columns.Add(main); columns.Add(side);
             page.Add(columns);
+        }
+
+        // One evidence panel: title (same name as the chip group), sample size, "참고용" SampleTag when the whole panel
+        // is below its threshold, SplitBar lines, then a StatTable whose muted rows are below their own threshold.
+        // With names, the table is the segment comparison: a Badge per player over its "직전"/"이번" columns, and the
+        // "직전" values in line-muted.
+        VisualElement EvidenceView(EvidencePanel p, string[] names = null)
+        {
+            var panel = Box("tsc-panel");
+            var head = Row(Text(p.Title, "tsc-title"), Box("tsc-grow"), Text(p.Sample, "tsc-stat", "tsc-muted"));
+            if (p.SampleTag) { var tag = Text("참고용", "tsc-label", "tsc-sample-tag"); tag.style.marginLeft = 8; head.Add(tag); }
+            head.style.marginBottom = 8;
+            panel.Add(head);
+            foreach (var s in p.Split)
+            {
+                var split = Box("tsc-split", "tsc-grow");
+                var labels = Box("tsc-split__labels");
+                labels.Add(Text(s.LeftText, "tsc-stat", s.Muted ? "tsc-muted" : "tsc-plain"));
+                labels.Add(Text(s.RightText, "tsc-stat", s.Muted ? "tsc-muted" : "tsc-plain"));
+                var bar = Box("tsc-split__bar");
+                var fill = Box("tsc-split__fill"); fill.style.width = Length.Percent(100 * Mathf.Clamp01(s.Backhand));
+                bar.Add(fill);
+                split.Add(labels); split.Add(bar);
+                var name = Text(s.Label, "tsc-label"); name.style.width = 40;
+                var line = Row(name, split); line.style.marginBottom = 8;
+                panel.Add(line);
+            }
+            int perPlayer = names == null ? 0 : p.Columns.Length / 2;
+            if (names != null)
+            {
+                var badges = Row(Text("", "tsc-cell", "tsc-cell--label"));
+                for (int i = 0; i < 2; i++) { var cell = Row(Badge(i), Text(names[i], "tsc-label")); cell.style.width = 80 * perPlayer; cell.style.justifyContent = Justify.FlexEnd; badges.Add(cell); }
+                panel.Add(badges);
+            }
+            var columns = Row(Text("", "tsc-cell", "tsc-cell--label"));
+            foreach (var c in p.Columns) columns.Add(Text(c, "tsc-label", "tsc-cell"));
+            panel.Add(columns);
+            foreach (var r in p.Rows)
+            {
+                var row = Box("tsc-table-row");
+                row.Add(Text(r.Label, "tsc-body", "tsc-cell", "tsc-cell--label"));
+                for (int i = 0; i < r.Values.Length; i++)
+                {
+                    bool previous = perPlayer == 2 && i % 2 == 0;
+                    row.Add(Number(r.Values[i], "tsc-stat")); row[row.childCount - 1].AddToClassList("tsc-cell");
+                    if (r.Muted || previous) row[row.childCount - 1].AddToClassList("tsc-muted");
+                }
+                panel.Add(row);
+            }
+            return panel;
         }
 
         VisualElement StatHeader(string[] names, bool withMatch)
@@ -527,14 +581,51 @@ namespace TennisSim.Coach
             timeline.Add(grid);
             page.Add(timeline);
 
+            // The opponent coach's changes, one Inset line each: where, what changed, and its stated reason.
+            var changes = Box("tsc-panel"); changes.style.marginBottom = 16;
+            changes.Add(Text(v.Names[1] + " 코치의 변경", "tsc-label", "tsc-gap-bottom"));
+            if (v.OpponentChanges.Count == 0) changes.Add(Text(v.NoOpponentChange, "tsc-body", "tsc-muted"));
+            foreach (var c in v.OpponentChanges)
+            {
+                var line = Box("tsc-inset", "tsc-inset--compact"); line.style.marginBottom = 8;
+                line.Add(Text(c.Kicker, "tsc-label", "tsc-inset__kicker"));
+                line.Add(Text(c.Change, "tsc-body"));
+                line.Add(Text(c.Reasons, "tsc-body", "tsc-muted"));
+                changes.Add(line);
+            }
+            page.Add(changes);
+
             var columns = Box("tsc-row", "tsc-grow"); columns.style.alignItems = Align.Stretch;
             var map = Box("tsc-panel", "tsc-gap-right"); map.style.width = 300;
-            map.Add(Text(v.Names[0] + " 랠리 샷 첫 착지 · " + v.Landings.Count + "구", "tsc-label", "tsc-gap-bottom"));
+            map.Add(Text(v.Names[0] + " 랠리 샷 첫 착지", "tsc-label", "tsc-gap-bottom"));
+            // Filter chips: all shots, or only those hit under each attack-direction tactic actually used.
+            var filterRow = Box("tsc-row"); filterRow.style.marginBottom = 8;
+            map.Add(filterRow);
             // Fills the panel height; draws the whole half court (net to beyond the baseline and sidelines) letterboxed.
             var half = new HalfCourtView(v.Landings); half.AddToClassList("tsc-inset"); half.AddToClassList("tsc-inset--compact"); half.style.flexGrow = 1; half.style.minHeight = 200; half.style.marginBottom = 8;
             map.Add(half);
-            map.Add(Text("주황 채움 = 백핸드 쪽 샷 " + v.BackhandTargets + "구 · 회색 빈 원 = 그 외", "tsc-body", "tsc-muted", "tsc-legend"));
-            map.Add(Text("흰 빈 원 = 아웃 " + v.Outs + "구", "tsc-body", "tsc-muted", "tsc-legend"));
+            var count = Text("", "tsc-body", "tsc-legend");
+            map.Add(count);
+            map.Add(Text("채운 원 = 백핸드 쪽 샷 · 빈 원 = 그 외 · 흰 빈 원 = 아웃", "tsc-body", "tsc-muted", "tsc-legend"));
+            string filter = "all";
+            void DrawFilter()
+            {
+                var shown = CoachViews.Filter(v.Landings, filter);
+                half.Set(shown);
+                count.text = Display(CoachViews.LandingLegend(shown) + " · 아웃 " + shown.Count(l => !l.In) + "구", false);
+                filterRow.Clear();
+                foreach (var f in v.LandingFilters)
+                {
+                    var option = f;
+                    var chip = new Button(() => { filter = option.Key; DrawFilter(); }) { text = Display(f.Label, true) };
+                    chip.AddToClassList("tsc-chip"); chip.AddToClassList("tsc-label");
+                    ApplyFont(chip, f.Label, new[] { "tsc-label" });
+                    if (f.Key == filter) chip.AddToClassList("tsc-chip--selected");
+                    chip.style.marginBottom = 0;
+                    filterRow.Add(chip);
+                }
+            }
+            DrawFilter();
             var table = Box("tsc-panel", "tsc-grow"); table.style.flexBasis = 0;
             table.Add(Text("경기 전체 기록", "tsc-label", "tsc-gap-bottom"));
             table.Add(StatHeader(v.Names, false));

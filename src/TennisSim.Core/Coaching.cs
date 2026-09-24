@@ -21,6 +21,34 @@ namespace TennisSim.Core
         public int Backhands { get; set; }
         // Energy in [.15,1] after the last point of the range; -1 when the range holds no completed point.
         public double EnergyAtEnd { get; set; } = -1;
+        // Rally shots by where this player aimed them: the opponent's backhand side (shot choice Backhand), forehand
+        // side (Forehand), or anything else (OpenCourt, Attack, SafeDeep).
+        public AimStats BackhandAim { get; set; } = new AimStats();
+        public AimStats ForehandAim { get; set; } = new AimStats();
+        public AimStats OtherAim { get; set; } = new AimStats();
+        // This player's serve points by the course of the point's first serve (serve choice Wide/Body/T).
+        public ServeCourseStats WideServe { get; set; } = new ServeCourseStats();
+        public ServeCourseStats BodyServe { get; set; } = new ServeCourseStats();
+        public ServeCourseStats TServe { get; set; } = new ServeCourseStats();
+        public ServeCourseStats? ServeCourse(string course) => course == "Wide" ? WideServe : course == "Body" ? BodyServe : course == "T" ? TServe : null;
+    }
+    // What happened to shots aimed at one side. Every shot ends exactly one way: Shots = Winners + Errors +
+    // ReplyForehands + ReplyBackhands, where a reply is the opponent's next hit. ReplyErrors counts replies that ended
+    // the point in the net or out, so they are a subset of the replies.
+    public sealed class AimStats
+    {
+        public int Shots { get; set; }
+        public int Winners { get; set; }
+        public int Errors { get; set; }
+        public int ReplyForehands { get; set; }
+        public int ReplyBackhands { get; set; }
+        public int ReplyErrors { get; set; }
+    }
+    public sealed class ServeCourseStats
+    {
+        public int Points { get; set; }
+        public int FirstServesIn { get; set; }
+        public int Won { get; set; }
     }
     public sealed class SegmentStats
     {
@@ -36,15 +64,17 @@ namespace TennisSim.Core
             var ids = record.Stats.Players.Select(p => p.PlayerId).ToArray();
             var result = new SegmentStats { FromPoint = fromPoint, ToPoint = toPoint, Players = ids.Select(id => new SegmentPlayerStats { PlayerId = id }).ToArray() };
             int Index(string id) => Array.IndexOf(ids, id);
-            MatchEvent? lastHit = null; bool serveFault = false; int rallyTotal = 0, rallyHits = 0;
+            MatchEvent? lastHit = null, firstServe = null; bool serveFault = false; int rallyTotal = 0, rallyHits = 0;
+            var rally = new List<MatchEvent>();
             foreach (var e in record.Events)
             {
                 if (e.Point < fromPoint || e.Point > toPoint) continue;
-                if (e.Kind == "PointStarted") { lastHit = null; serveFault = false; rallyHits = 0; }
+                if (e.Kind == "PointStarted") { lastHit = null; firstServe = null; serveFault = false; rallyHits = 0; rally.Clear(); }
                 else if (e.Kind == "ServeFault") serveFault = true;
                 else if (e.Kind == "BallHit")
                 {
                     lastHit = e;
+                    if (e.ShotKind == "Serve") { if (firstServe == null) firstServe = e; } else rally.Add(e);
                     if (e.ShotKind != "Serve")
                     {
                         rallyHits++;
@@ -71,6 +101,23 @@ namespace TennisSim.Core
                     }
                     // Legal serve plus rally hits, matching MatchStats.RallyLengths.
                     rallyTotal += e.Reason == "DoubleFault" ? 0 : rallyHits + 1;
+                    var course = firstServe == null ? null : server.ServeCourse(firstServe.Reason);
+                    if (course != null) { course.Points++; if (!serveFault) course.FirstServesIn++; if (server == winner) course.Won++; }
+                    // Each rally shot ends as a winner, an own error, or the opponent's next hit (a reply).
+                    for (int k = 0; k < rally.Count; k++)
+                    {
+                        var shot = rally[k];
+                        var hitter = result.Players[Index(shot.PlayerId)];
+                        var aim = shot.Reason == "Backhand" ? hitter.BackhandAim : shot.Reason == "Forehand" ? hitter.ForehandAim : hitter.OtherAim;
+                        aim.Shots++;
+                        if (k + 1 < rally.Count)
+                        {
+                            if (rally[k + 1].Stroke == "Backhand") aim.ReplyBackhands++; else aim.ReplyForehands++;
+                            if (k + 2 == rally.Count && (e.Reason == "Out" || e.Reason == "Net")) aim.ReplyErrors++;
+                        }
+                        else if (e.Reason == "UnreturnedBall") aim.Winners++;
+                        else aim.Errors++;
+                    }
                     for (int i = 0; i < result.Players.Length; i++) result.Players[i].EnergyAtEnd = e.State.Players[i].Energy;
                 }
             }

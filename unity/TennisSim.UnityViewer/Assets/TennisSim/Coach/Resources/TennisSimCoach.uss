@@ -109,6 +109,15 @@
 .tsc-root .unity-scroller--vertical .unity-base-slider__dragger { background-color: var(--control-border); border-width: 0; border-radius: 4px; left: 0; right: 0; width: 8px; margin: 0; }
 .tsc-root .unity-scroller--vertical .unity-base-slider__dragger:hover { background-color: var(--line-muted); }
 
+/* SplitBar (design system v25): the opponent's backhand share as a filled part; never colour-coded. */
+.tsc-split { flex-direction: column; }
+.tsc-split__labels { flex-direction: row; justify-content: space-between; margin-bottom: 4px; }
+.tsc-split__bar { height: 8px; border-width: 1px; border-color: var(--control-border); border-radius: 4px; background-color: var(--ground); overflow: hidden; }
+.tsc-split__fill { height: 100%; background-color: var(--line-muted); }
+
+/* SampleTag: "참고용" beside a panel title when its sample is below the threshold. */
+.tsc-root .tsc-sample-tag { height: 20px; min-height: 20px; padding: 0 8px; border-width: 1px; border-color: var(--control-border); border-radius: 4px; color: var(--line-muted); -unity-text-align: middle-center; flex-shrink: 0; }
+
 /* Tables */
 .tsc-table-row { flex-shrink: 0; min-height: 32px; align-items: center; flex-direction: row; border-top-width: 1px; border-color: var(--net); padding-top: 6px; padding-bottom: 6px; }
 .tsc-root .tsc-cell { width: 80px; -unity-text-align: middle-right; }

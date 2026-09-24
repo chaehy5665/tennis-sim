@@ -125,8 +125,8 @@ namespace TennisSim.Coach
             var full = contentRect;
             if (full.width <= 0 || full.height <= 0) return;
             var p = ctx.painter2D;
+            // The ground surface comes from the element's Inset class; only lines and dots are painted here.
             var r = CourtPaint.Fit(full, 2 * spanX, spanZ);
-            CourtPaint.Fill(p, r, CourtPaint.Ground);
             float hw = CourtPaint.HalfWidth, hl = CourtPaint.HalfLength, sl = CourtPaint.ServiceLine;
             CourtPaint.Rect(p, Map(-hw, hl, r), Map(hw, 0, r), CourtPaint.Line, 2);
             CourtPaint.Segment(p, Map(-hw, sl, r), Map(hw, sl, r), CourtPaint.Line, 2);

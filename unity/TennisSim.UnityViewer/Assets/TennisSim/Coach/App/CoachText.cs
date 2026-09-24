@@ -7,12 +7,13 @@ namespace TennisSim.Coach
     // Korean wording for the coaching screens. Pure formatting: every number comes from the engine record.
     public static class CoachText
     {
-        public static string Target(TargetStyle t) => t == TargetStyle.TargetBackhand ? "백핸드 공략" : "균형";
+        // Option names never repeat across axes: attack direction Balanced is "양쪽" because aggression Balanced is "균형".
+        public static string Target(TargetStyle t) => t == TargetStyle.TargetBackhand ? "백핸드 공략" : "양쪽";
         public static string Aggression(Aggression a) => a == Core.Aggression.Safe ? "안전" : a == Core.Aggression.Aggressive ? "공격" : "균형";
         public static string Serve(ServeDirection s) => s == ServeDirection.Wide ? "와이드" : s == ServeDirection.Body ? "바디" : s == ServeDirection.T ? "T" : "혼합";
         public static string Tactic(Tactic t) => Target(t.Target) + " · " + Aggression(t.Aggression) + " · " + Serve(t.Serve);
-        // Spaced separators: KeepAll joins Hangul to its neighbours, so an unspaced "균형·안전·혼합" could not wrap at all.
-        public static string Short(Tactic t) => (t.Target == TargetStyle.TargetBackhand ? "백핸드" : "균형") + " · " + Aggression(t.Aggression) + " · " + Serve(t.Serve);
+        // Spaced separators: KeepAll joins Hangul to its neighbours, so an unspaced "양쪽·안전·혼합" could not wrap at all.
+        public static string Short(Tactic t) => (t.Target == TargetStyle.TargetBackhand ? "백핸드" : "양쪽") + " · " + Aggression(t.Aggression) + " · " + Serve(t.Serve);
 
         public static string Stroke(string stroke) => stroke == "Forehand" ? "포핸드" : stroke == "Backhand" ? "백핸드" : stroke == "Serve" ? "서브" : stroke;
 
@@ -57,6 +58,9 @@ namespace TennisSim.Coach
             return sb.ToString();
         }
         public static bool IsHangul(char c) => (c >= '\uAC00' && c <= '\uD7A3') || (c >= '\u1100' && c <= '\u11FF') || (c >= '\u3130' && c <= '\u318F');
+
+        // No value (zero denominator, not applicable): one full-width dash. Ranges keep the short dash ("1–6").
+        public const string None = "—";
 
         public static string Ratio(int k, int n) => k.ToString(CultureInfo.InvariantCulture) + "/" + n.ToString(CultureInfo.InvariantCulture);
         public static string Percent(double x) => Math.Round(100 * x).ToString(CultureInfo.InvariantCulture) + "%";

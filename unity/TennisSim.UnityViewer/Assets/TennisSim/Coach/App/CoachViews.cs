@@ -78,7 +78,7 @@ namespace TennisSim.Coach
             return new List<TacticGroup>
             {
                 new TacticGroup { Key = "target", Label = "공격 방향", Options = {
-                    O("target", "balanced", "균형", "양쪽 사이드로 고르게 벌립니다."),
+                    O("target", "balanced", "양쪽", "양쪽 사이드로 고르게 벌립니다."),
                     O("target", "backhand", "백핸드 공략", "상대 백핸드 쪽으로 몰아칩니다. 백핸드가 약한 상대에게 유리합니다.") } },
                 new TacticGroup { Key = "aggression", Label = "공격성", Options = {
                     O("aggression", "safe", "안전", "실수가 적고 빠른 공을 잘 받아냅니다. 느린 공을 줘서 공격당하기 쉽습니다."),
@@ -180,10 +180,10 @@ namespace TennisSim.Coach
                 R("타수 포핸드/백핸드", p => p.Forehands + "/" + p.Backhands)
             };
             // Energy is a state at the end of the range, so the segment and the match show the same value.
-            rows.Add(new StatRow { Label = "체력", A = Energy(s.Players[0]), B = Energy(s.Players[1]), MatchA = m == null ? null : "–", MatchB = m == null ? null : "–" });
+            rows.Add(new StatRow { Label = "체력", A = Energy(s.Players[0]), B = Energy(s.Players[1]), MatchA = m == null ? null : CoachText.None, MatchB = m == null ? null : CoachText.None });
             return rows;
         }
-        static string Energy(SegmentPlayerStats p) => p.EnergyAtEnd < 0 ? "–" : CoachText.Fixed(p.EnergyAtEnd, 2);
+        static string Energy(SegmentPlayerStats p) => p.EnergyAtEnd < 0 ? CoachText.None : CoachText.Fixed(p.EnergyAtEnd, 2);
 
         public static ChangeoverView Changeover(CoachSession session)
         {

@@ -99,7 +99,8 @@ namespace TennisSim.Coach
             return l;
         }
         // Label text is uppercase (USS has no text-transform); Korean words are kept whole across line breaks.
-        static string Display(string text, bool label) => CoachText.KeepAll(label ? text.ToUpperInvariant() : text);
+        // Uppercase applies only to all-Latin labels ("EMBER"); a label with Hangul keeps names as written.
+        static string Display(string text, bool label) => CoachText.KeepAll(label && !HasHangul(text) ? text.ToUpperInvariant() : text);
         static Font LoadFont(string name)
         {
             var font = Resources.Load<Font>("Fonts/" + name);
@@ -167,8 +168,8 @@ namespace TennisSim.Coach
             }
             if (player == 1)
             {
-                var memo = Box(); memo.style.backgroundColor = Hex("#060b11"); memo.style.marginTop = 16; memo.style.paddingTop = memo.style.paddingBottom = memo.style.paddingLeft = memo.style.paddingRight = 16;
-                memo.Add(Text("코치 메모", "tsc-label"));
+                var memo = Box("tsc-inset"); memo.style.marginTop = 16;
+                memo.Add(Text("코치 메모", "tsc-label", "tsc-inset__kicker"));
                 memo.Add(Text(v.ScoutingMemo, "tsc-body"));
                 panel.Add(memo);
                 var note = Text(v.OpponentCoachNote, "tsc-body", "tsc-muted"); note.style.marginTop = 16;
@@ -371,7 +372,7 @@ namespace TennisSim.Coach
             }
             Redraw();
             side.Add(chips);
-            var summaryBox = Box(); summaryBox.style.backgroundColor = Hex("#060b11"); summaryBox.style.paddingTop = summaryBox.style.paddingBottom = summaryBox.style.paddingLeft = summaryBox.style.paddingRight = 8; summaryBox.style.marginTop = 8; summaryBox.style.marginBottom = 16;
+            var summaryBox = Box("tsc-inset", "tsc-inset--compact"); summaryBox.style.marginTop = 8; summaryBox.style.marginBottom = 16;
             summaryBox.Add(summary);
             side.Add(summaryBox);
             side.Add(ButtonRow(MakeButton("유지하고 계속", () => Resume(null), false), MakeButton("적용하고 계속", () => Resume(pending), true)));
@@ -420,7 +421,7 @@ namespace TennisSim.Coach
             {
                 int span = Math.Max(1, s.LastGame - s.FirstGame + 1);
                 var cell = Box(); cell.style.flexGrow = span; cell.style.flexBasis = 0; cell.style.minWidth = 180; cell.style.paddingLeft = cell.style.paddingRight = 4; cell.style.marginBottom = 8;
-                var inner = Box(); inner.style.flexGrow = 1; inner.style.backgroundColor = Hex("#060b11"); inner.style.paddingTop = inner.style.paddingBottom = inner.style.paddingLeft = inner.style.paddingRight = 8;
+                var inner = Box("tsc-inset", "tsc-inset--compact"); inner.style.flexGrow = 1;
                 inner.Add(Text(s.Games, "tsc-label"));
                 inner.Add(Text("A " + s.TacticA, "tsc-body"));
                 inner.Add(Text("B " + s.TacticB, "tsc-body", "tsc-muted"));
@@ -444,7 +445,7 @@ namespace TennisSim.Coach
             var map = Box("tsc-panel", "tsc-gap-right"); map.style.width = 300;
             map.Add(Text(v.Names[0] + " 랠리 샷 첫 착지 · " + v.Landings.Count + "구", "tsc-label", "tsc-gap-bottom"));
             // Fills the panel height; draws the whole half court (net to beyond the baseline and sidelines) letterboxed.
-            var half = new HalfCourtView(v.Landings); half.style.flexGrow = 1; half.style.minHeight = 200; half.style.marginBottom = 8;
+            var half = new HalfCourtView(v.Landings); half.AddToClassList("tsc-inset"); half.AddToClassList("tsc-inset--compact"); half.style.flexGrow = 1; half.style.minHeight = 200; half.style.marginBottom = 8;
             map.Add(half);
             map.Add(Text("주황 채움 = 백핸드 쪽 샷 " + v.BackhandTargets + "구 · 회색 빈 원 = 그 외", "tsc-body", "tsc-muted"));
             map.Add(Text("흰 빈 원 = 아웃 " + v.Outs + "구", "tsc-body", "tsc-muted"));

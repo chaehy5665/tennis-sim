@@ -158,6 +158,16 @@ Test("Korean words stay whole: word joiners only around Hangul, never at spaces"
     Check(once.Split(' ').Length == 4, "spaces untouched");
     Check(CoachText.KeepAll(CoachText.Short(new Tactic())).Split(' ').Length == 5, "short tactic text keeps break points between settings");
 });
+Test("Option names never repeat across axes; empty values use the full-width dash", () =>
+{
+    var names = CoachViews.TacticGroups(false).SelectMany(g => g.Options.Select(o => o.Label)).ToList();
+    Check(names.Distinct().Count() == names.Count, string.Join(",", names));
+    Check(CoachText.Tactic(new Tactic()) == "양쪽 · 균형 · 혼합" && CoachText.Short(new Tactic()) == "양쪽 · 균형 · 혼합");
+    var s = Play(3, 0); var views = new List<ChangeoverView>(); Play(3, 0, views);
+    var energy = views[0].Rows.Single(r => r.Label == "체력");
+    Check(energy.MatchA == "—" && energy.MatchB == "—" && CoachText.None == "\u2014");
+    Check(views[0].Heading.Contains("–"), "ranges keep the short dash");
+});
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;
 

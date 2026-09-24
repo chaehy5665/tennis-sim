@@ -1,0 +1,9 @@
+{
+  "name": "TennisSim.Coach.Editor",
+  "references": [
+    "TennisSim.Coach"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "TennisSim.Coach.PlayMode",
+  "references": [
+    "TennisSim.Coach",
+    "TennisSim.Coach.App"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

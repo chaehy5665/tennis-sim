@@ -82,13 +82,43 @@ namespace TennisSim.Core
     // A rule-based coach for the player the user does not control. It sees only what a human coach sees at a
     // changeover: both profiles, both current tactics and the recorded segment and match statistics. It consumes no
     // randomness; its changes go through MatchEngine.QueueTactics and are recorded like a human's.
+    // Why OpponentCoach chose a setting. A and B carry the numbers behind the rule (rates, profile sums), so a UI
+    // can explain the change in its own language without re-deriving the rule.
+    public enum CoachReasonKind
+    {
+        TargetMeasuredErrors,   // A = opponent backhand error rate, B = forehand error rate
+        TargetScouting,         // A = opponent forehand power+control, B = backhand power+control
+        CounterSafe,            // opponent plays Safe
+        CounterAggressive,      // opponent plays Aggressive
+        SteadyPlayer,           // own mean control >= .85 against a Balanced opponent
+        NeutralStyle,           // Balanced against a Balanced opponent
+        BigServerWide,          // A = own serve power
+        ServeRead               // A = serve points won, B = serve points in the segment
+    }
+    public sealed class CoachReason
+    {
+        public CoachReasonKind Kind { get; set; }
+        public double A { get; set; }
+        public double B { get; set; }
+    }
+    public sealed class CoachDecision
+    {
+        public Tactic Tactic { get; set; } = new Tactic();
+        // Reasons for the settings that differ from the current tactic, in target, aggression, serve order.
+        public List<CoachReason> Reasons { get; set; } = new List<CoachReason>();
+    }
+
     public static class OpponentCoach
     {
         const int MinStrokes = 12;
 
-        public static Tactic? Decide(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players)
+        public static Tactic? Decide(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players) =>
+            DecideWithReasons(self, record, fromPoint, toPoint, current, players)?.Tactic;
+
+        public static CoachDecision? DecideWithReasons(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players)
         {
             int other = 1 - self;
+            CoachReason? target = null, aggression = null, serve = null;
             var match = SegmentStats.Compute(record, 1, toPoint).Players;
             var segment = SegmentStats.Compute(record, fromPoint, toPoint).Players;
             var next = current[self].Copy();
@@ -100,12 +130,14 @@ namespace TennisSim.Core
                 double fh = (double)o.ForehandErrors / o.Forehands, bh = (double)o.BackhandErrors / o.Backhands;
                 if (bh > fh * 1.25) next.Target = TargetStyle.TargetBackhand;
                 else if (fh > bh * 1.25) next.Target = TargetStyle.Balanced;
+                target = new CoachReason { Kind = CoachReasonKind.TargetMeasuredErrors, A = bh, B = fh };
             }
             else
             {
                 var p = players[other];
                 double gap = (p.ForehandPower + p.ForehandControl) - (p.BackhandPower + p.BackhandControl);
                 next.Target = gap > .1 ? TargetStyle.TargetBackhand : TargetStyle.Balanced;
+                target = new CoachReason { Kind = CoachReasonKind.TargetScouting, A = p.ForehandPower + p.ForehandControl, B = p.BackhandPower + p.BackhandControl };
             }
 
             // Counter the opponent's visible style (tennissim-mvp-4 balance grid): attack a passive opponent, stay
@@ -114,19 +146,27 @@ namespace TennisSim.Core
             bool steady = (mine.ForehandControl + mine.BackhandControl) / 2 >= .85;
             switch (current[other].Aggression)
             {
-                case Aggression.Safe: next.Aggression = Aggression.Aggressive; break;
-                case Aggression.Aggressive: next.Aggression = Aggression.Balanced; break;
-                default: next.Aggression = steady ? Aggression.Safe : Aggression.Balanced; break;
+                case Aggression.Safe: next.Aggression = Aggression.Aggressive; aggression = new CoachReason { Kind = CoachReasonKind.CounterSafe }; break;
+                case Aggression.Aggressive: next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.CounterAggressive }; break;
+                default:
+                    next.Aggression = steady ? Aggression.Safe : Aggression.Balanced;
+                    aggression = new CoachReason { Kind = steady ? CoachReasonKind.SteadyPlayer : CoachReasonKind.NeutralStyle, A = (mine.ForehandControl + mine.BackhandControl) / 2 };
+                    break;
             }
             var me = segment[self];
 
             // A big server commits to the wide serve at the first changeover; any fixed direction that loses most of its
             // serve points in a segment goes back to Mixed, and Mixed is never left again after that first decision.
-            if (fromPoint == 1 && mine.ServePower >= .9 && current[self].Serve == ServeDirection.Mixed) next.Serve = ServeDirection.Wide;
-            else if (current[self].Serve != ServeDirection.Mixed && me.ServePoints >= 3 && me.ServePointsWon * 2 < me.ServePoints) next.Serve = ServeDirection.Mixed;
+            if (fromPoint == 1 && mine.ServePower >= .9 && current[self].Serve == ServeDirection.Mixed)
+            { next.Serve = ServeDirection.Wide; serve = new CoachReason { Kind = CoachReasonKind.BigServerWide, A = mine.ServePower }; }
+            else if (current[self].Serve != ServeDirection.Mixed && me.ServePoints >= 3 && me.ServePointsWon * 2 < me.ServePoints)
+            { next.Serve = ServeDirection.Mixed; serve = new CoachReason { Kind = CoachReasonKind.ServeRead, A = me.ServePointsWon, B = me.ServePoints }; }
 
-            bool changed = next.Target != current[self].Target || next.Aggression != current[self].Aggression || next.Serve != current[self].Serve;
-            return changed ? next : null;
+            var decision = new CoachDecision { Tactic = next };
+            if (next.Target != current[self].Target) decision.Reasons.Add(target!);
+            if (next.Aggression != current[self].Aggression) decision.Reasons.Add(aggression!);
+            if (next.Serve != current[self].Serve) decision.Reasons.Add(serve!);
+            return decision.Reasons.Count > 0 ? decision : null;
         }
     }
 }

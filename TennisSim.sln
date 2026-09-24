@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TennisSim.Tests", "tests\Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TennisSim.Calibration", "src\TennisSim.Calibration\TennisSim.Calibration.csproj", "{B0BD7D1E-16B1-4BDB-B539-C18E278EE8EE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TennisSim.CoachChecks", "tests\TennisSim.CoachChecks\TennisSim.CoachChecks.csproj", "{84A6C5B8-2829-4E71-9015-8110160DB33C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,6 +75,18 @@ Global
 		{B0BD7D1E-16B1-4BDB-B539-C18E278EE8EE}.Release|x64.Build.0 = Release|Any CPU
 		{B0BD7D1E-16B1-4BDB-B539-C18E278EE8EE}.Release|x86.ActiveCfg = Release|Any CPU
 		{B0BD7D1E-16B1-4BDB-B539-C18E278EE8EE}.Release|x86.Build.0 = Release|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Debug|x64.Build.0 = Debug|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Debug|x86.Build.0 = Debug|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Release|x64.ActiveCfg = Release|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Release|x64.Build.0 = Release|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Release|x86.ActiveCfg = Release|Any CPU
+		{84A6C5B8-2829-4E71-9015-8110160DB33C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,5 +96,6 @@ Global
 		{4CA1BE8F-BE1E-4EB1-BD95-8AD45D358AB9} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{F5A1512D-CBE1-4446-91B5-FC5B052015FF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{B0BD7D1E-16B1-4BDB-B539-C18E278EE8EE} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{84A6C5B8-2829-4E71-9015-8110160DB33C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

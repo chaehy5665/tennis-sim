@@ -53,18 +53,24 @@ if 'com.unity.test-framework' not in p.get('dependencies',{}):
  sys.exit('BLOCKED: Open this project with the selected Editor and add its compatible Test Framework via Package Manager, then rerun. No package version was guessed.')
 print('TEST_FRAMEWORK_REQUESTED='+p['dependencies']['com.unity.test-framework'])
 PY
+# The coach UI runs actual Core: rebuild and copy the DLL before the Editor imports the project.
+"$root/scripts/sync-core-to-unity.sh" | tee "$output/core-dll.txt"
 [[ "$mode" != prepare ]] || exit 0
 [[ -f "$project/Assets/StreamingAssets/Replays/sample-42.json" ]] || { echo 'ERROR: Run prepare-unity-replay.sh first.' >&2; exit 2; }
 python3 -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]); print(hashlib.sha256(p.read_bytes()).hexdigest(),p)' "$project/Assets/StreamingAssets/Replays/sample-42.json" > "$output/replay.sha256"
 if [[ "$mode" == compile || "$mode" == all ]]; then
   run_editor compile -batchmode -nographics -quit -projectPath "$project" -executeMethod TennisSim.Viewer.Editor.ReplaySceneSetup.Setup
   python3 -c 'import pathlib,sys; sys.exit(0 if "TENNISSIM_SCENE_READY" in pathlib.Path(sys.argv[1]).read_text() else 1)' "$output/compile.log" || { echo 'ERROR: Scene setup/compilation completion marker missing' >&2; exit 1; }
+  run_editor coach-scene -batchmode -nographics -quit -projectPath "$project" -executeMethod TennisSim.Coach.Editor.CoachSceneSetup.Setup
+  python3 -c 'import pathlib,sys; sys.exit(0 if "TENNISSIM_COACH_SCENE_READY" in pathlib.Path(sys.argv[1]).read_text() else 1)' "$output/coach-scene.log" || { echo 'ERROR: Coach scene completion marker missing' >&2; exit 1; }
   [[ "$mode" != compile ]] || exit 0
 fi
 for platform in EditMode PlayMode; do
   [[ "$mode" == all || "$mode" == "$platform" ]] || continue
   # Test runner owns termination; NEVER combine -runTests with -quit.
-  run_editor "$platform" -batchmode -nographics -projectPath "$project" -runTests -testPlatform "$platform" -assemblyNames "TennisSim.Viewer.$platform" -testResults "$output/$platform.xml"
+  assemblies="TennisSim.Viewer.$platform"
+  [[ "$platform" != PlayMode ]] || assemblies="$assemblies;TennisSim.Coach.PlayMode"
+  run_editor "$platform" -batchmode -nographics -projectPath "$project" -runTests -testPlatform "$platform" -assemblyNames "$assemblies" -testResults "$output/$platform.xml"
   python3 "$root/scripts/check-unity-test-results.py" "$output/$platform.xml"
 done
 [[ ! -f "$project/Packages/packages-lock.json" ]] || cp "$project/Packages/packages-lock.json" "$output/packages-lock.json"

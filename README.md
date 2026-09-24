@@ -44,6 +44,10 @@ dotnet run --project src/TennisSim.Cli --no-build -- coach \
 dotnet run --project src/TennisSim.Cli --no-build -- coach-eval \
   --sets 30 --seed 100 --out artifacts/balance/coach-eval-30.json
 
+# Unity 코치 UI: Core DLL을 Unity 프로젝트로 복사 (docs/UNITY_COACH_UI.md)
+scripts/sync-core-to-unity.sh
+dotnet run --project tests/TennisSim.CoachChecks --no-build
+
 # 전술 밸런스 격자: 선수 조합 × 전술별 독립 포인트 승률 (docs/BALANCE_DIAGNOSIS.md)
 dotnet run --project src/TennisSim.Cli --no-build -- balance \
   --count 2000 --seed 100 --out artifacts/balance/balance-2000.json

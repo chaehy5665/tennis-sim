@@ -1,0 +1,6 @@
+{
+  "name": "TennisSim.Coach",
+  "references": [
+    "TennisSim.Coach.App"
+  ]
+}

@@ -5,6 +5,7 @@ using TennisSim.Core.Bounce;
 
 namespace TennisSim.Core
 {
+    public enum ChangeoverStop { Changeover, Finished, TickBudget }
     public sealed class MatchEngine
     {
         private readonly MatchInput input;
@@ -89,17 +90,20 @@ namespace TennisSim.Core
         // Advances until the players change ends (after odd games, every six tiebreak points) and returns true, paused
         // before the next point starts; tactics queued now apply from that point. Returns false when the match ends,
         // including an end change on the final point.
-        public bool AdvanceToChangeover()
+        public bool AdvanceToChangeover() => AdvanceUntilChangeover(long.MaxValue) == ChangeoverStop.Changeover;
+        // Same as AdvanceToChangeover, but stops after at most maxTicks so a renderer can play a match frame by frame.
+        public ChangeoverStop AdvanceUntilChangeover(long maxTicks)
         {
+            if (maxTicks < 0) throw new ArgumentException("Negative tick count");
             int seen = Record.Events.Count;
-            while (!Finished)
+            for (long n = 0; n < maxTicks && !Finished; n++)
             {
                 AdvanceTicks(1);
                 for (int i = seen; i < Record.Events.Count; i++)
-                    if (Record.Events[i].Kind == "EndsChanged" && !score.Complete) return true;
+                    if (Record.Events[i].Kind == "EndsChanged" && !score.Complete) return ChangeoverStop.Changeover;
                 seen = Record.Events.Count;
             }
-            return false;
+            return Finished ? ChangeoverStop.Finished : ChangeoverStop.TickBudget;
         }
         private void Step()
         {

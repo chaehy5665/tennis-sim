@@ -1,0 +1,78 @@
+/* TennisSim Coach UI design system (tokens v2): colours, type steps, spacing and radii by token name.
+   USS has no line-height or text-transform; labels are Korean, so the uppercase rule has no effect. */
+:root {
+    --ground: #060b11;
+    --court: #144040;
+    --line: #ffffff;
+    --net: #8c969e;
+    --line-muted: #aab4bb;
+    --control-border: #8c969e;
+    --selected: #ffffff;
+    --on-selected: #060b11;
+    --info-surface: #1c2630;
+    --info-border: #aab4bb;
+    --player-a: #ff731f;
+    --player-b: #40a6ff;
+    --ball: #ffeb04;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 16px;
+    --space-4: 32px;
+}
+.tsc-root { flex-grow: 1; background-color: var(--ground); }
+.tsc-root .unity-text-element { color: var(--line); white-space: normal; margin: 0; padding: 0; }
+
+/* Type */
+.tsc-root .tsc-headline { font-size: 28px; -unity-font-style: bold; letter-spacing: -0.28px; }
+.tsc-root .tsc-title { font-size: 18px; -unity-font-style: bold; }
+.tsc-root .tsc-body { font-size: 15px; }
+.tsc-root .tsc-label { font-size: 12px; -unity-font-style: bold; letter-spacing: 0.72px; }
+.tsc-root .tsc-score { font-size: 40px; -unity-font-style: bold; }
+.tsc-root .tsc-stat { font-size: 14px; }
+.tsc-root .tsc-muted { color: var(--line-muted); }
+/* net text only on ground */
+.tsc-root .tsc-on-ground-muted { color: var(--net); }
+
+/* Layout */
+.tsc-row { flex-direction: row; }
+.tsc-grow { flex-grow: 1; flex-shrink: 1; }
+.tsc-screen { flex-grow: 1; padding: 32px; }
+.tsc-header { flex-direction: row; align-items: center; height: 56px; padding-left: 32px; padding-right: 32px; border-bottom-width: 1px; border-color: var(--net); }
+.tsc-steps { flex-direction: row; flex-grow: 1; justify-content: center; }
+.tsc-root .tsc-step { padding: 8px 16px; margin-left: 8px; border-radius: 4px; color: var(--net); }
+.tsc-root .tsc-step--current { background-color: var(--selected); color: var(--on-selected); }
+.tsc-panel { background-color: var(--court); border-width: 1px; border-color: var(--control-border); border-radius: 0; padding: 16px; }
+.tsc-gap-bottom { margin-bottom: 16px; }
+.tsc-gap-right { margin-right: 32px; }
+
+/* Badges and bars */
+.tsc-root .tsc-badge { border-radius: 999px; height: 22px; min-width: 22px; padding-left: 8px; padding-right: 8px; -unity-text-align: middle-center; color: var(--on-selected); margin-right: 8px; }
+.tsc-badge--a { background-color: var(--player-a); }
+.tsc-badge--b { background-color: var(--player-b); }
+.tsc-bar-track { height: 8px; border-radius: 4px; background-color: var(--ground); flex-grow: 1; margin-left: 8px; margin-right: 8px; }
+.tsc-bar-fill { height: 8px; border-radius: 4px; }
+.tsc-bar-fill--a { background-color: var(--player-a); }
+.tsc-bar-fill--b { background-color: var(--player-b); }
+
+/* Chip: unselected court / control-border / line-muted; selected flips brightness. */
+.tsc-root .tsc-chip { background-color: var(--court); border-width: 1px; border-color: var(--control-border); border-radius: 4px; color: var(--line-muted); margin: 0 8px 8px 0; padding: 8px; min-height: 48px; -unity-text-align: middle-left; }
+.tsc-root .tsc-chip--selected { background-color: var(--selected); border-color: var(--selected); color: var(--on-selected); }
+.tsc-root .tsc-chip .unity-text-element { color: var(--line-muted); }
+.tsc-root .tsc-chip--selected .unity-text-element { color: var(--on-selected); }
+
+/* Buttons */
+.tsc-root .tsc-button { min-height: 48px; padding: 0 32px; border-radius: 4px; margin: 0 0 0 8px; -unity-font-style: bold; font-size: 13px; }
+.tsc-root .tsc-button--primary { background-color: var(--selected); color: var(--on-selected); border-width: 0; }
+.tsc-root .tsc-button--secondary { background-color: var(--ground); color: var(--line); border-width: 1px; border-color: var(--line); }
+
+/* Keyboard focus: ball ring. USS has no outline, so the border takes the ring colour. */
+.tsc-root .tsc-chip:focus, .tsc-root .tsc-button:focus { border-width: 2px; border-color: var(--ball); }
+
+/* InfoBanner */
+.tsc-banner { flex-direction: row; background-color: var(--info-surface); border-width: 1px; border-color: var(--info-border); border-radius: 0; padding: 16px; }
+.tsc-root .tsc-banner__icon { width: 22px; height: 22px; border-radius: 11px; border-width: 1.5px; border-color: var(--info-border); color: var(--line-muted); -unity-text-align: middle-center; margin-right: 16px; flex-shrink: 0; }
+
+/* Tables */
+.tsc-table-row { flex-direction: row; border-top-width: 1px; border-color: var(--net); padding-top: 6px; padding-bottom: 6px; }
+.tsc-root .tsc-cell { width: 80px; -unity-text-align: middle-right; }
+.tsc-root .tsc-cell--label { flex-grow: 1; -unity-text-align: middle-left; }

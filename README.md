@@ -44,6 +44,10 @@ dotnet run --project src/TennisSim.Cli --no-build -- coach \
 dotnet run --project src/TennisSim.Cli --no-build -- coach-eval \
   --sets 30 --seed 100 --out artifacts/balance/coach-eval-30.json
 
+# 자동 플레이 테스트: 코치 정책별 결정 가치, 지배 전략, 효과 가시성, 상대 AI 안정성 (docs/PLAYTEST.md)
+dotnet run --project src/TennisSim.Cli --no-build -- playtest \
+  --sets 40 --seed 100 --out artifacts/playtest.json
+
 # Unity 코치 UI: Core DLL을 Unity 프로젝트로 복사 (docs/UNITY_COACH_UI.md)
 scripts/sync-core-to-unity.sh
 dotnet run --project tests/TennisSim.CoachChecks --no-build

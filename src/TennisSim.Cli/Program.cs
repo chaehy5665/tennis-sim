@@ -13,12 +13,13 @@ internal static class Cli
     {
         if (args.Length == 0 || args[0] is "help" or "--help")
         {
-            Console.WriteLine("TennisSim: match | coach | compare | points | balance | bounce | replay | resimulate | diagnose | scenarios\n" +
+            Console.WriteLine("TennisSim: match | coach | coach-eval | playtest | compare | points | balance | bounce | replay | resimulate | diagnose | scenarios\n" +
                 "match --seed 42 --player-a baseline --player-b defender --tactics-a backhand --out artifacts/match.json\n" +
                 "compare --seeds 11,22,33,44,55 --out artifacts/comparison.json\npoints --count 1000 --seed 100 --out artifacts/points.json\n" +
                 "balance --count 2000 --seed 100 --out artifacts/balance.json\n" +
                 "coach --seed 42 --player-b defender --out artifacts/coached.json [--script commands.txt] [--opponent adaptive|fixed]\n" +
                 "coach-eval --sets 20 --seed 100 --out artifacts/coach-eval.json\n" +
+                "playtest --sets 40 --seed 100 --out artifacts/playtest.json [--player-a baseline --player-b strong-backhand]\n" +
                 "bounce --input impact.json --surface-model impulse --profile profiles/pair.json --out artifacts/bounce.json\n" +
                 "diagnose --input artifacts/match.json --out artifacts/audit.json --source-id SOURCE\nscenarios --out artifacts/scenarios.json\n" +
                 "replay --input artifacts/match.json\nresimulate --input artifacts/match.json --out artifacts/resimulated.json\n" +
@@ -98,6 +99,22 @@ internal static class Cli
                 Console.WriteLine($"B fixed:    sets {rows.Sum(r => r.FixedSetsB)}/{rows.Sum(r => r.Sets)}  points {Pct(rows.Sum(r => r.FixedPointsB), rows.Sum(r => r.FixedPoints)):F1}%");
                 Console.WriteLine($"B adaptive: sets {rows.Sum(r => r.AdaptiveSetsB)}/{rows.Sum(r => r.Sets)}  points {Pct(rows.Sum(r => r.AdaptivePointsB), rows.Sum(r => r.AdaptivePoints)):F1}%  changes {rows.Sum(r => r.AdaptiveChanges)}");
                 return rows.Sum(r => r.Failures) == 0 ? 0 : 1;
+            }
+            case "playtest":
+            {
+                int sets = int.Parse(Get("sets", "40")); if (sets < 1 || sets > 10000) throw new ArgumentException("sets must be 1..10000");
+                uint seed = uint.Parse(Get("seed", "100"));
+                (string, string)? matchup = null;
+                if (options.ContainsKey("player-a") || options.ContainsKey("player-b"))
+                {
+                    string a = Get("player-a", "baseline"), b = Get("player-b", "strong-backhand");
+                    if (!BalanceGrid.Presets.Contains(a) || !BalanceGrid.Opponents.Contains(b)) throw new ArgumentException("playtest players must be balance-grid presets: A " + string.Join("|", BalanceGrid.Presets) + ", B " + string.Join("|", BalanceGrid.Opponents));
+                    matchup = (a, b);
+                }
+                var result = Playtest.Run(sets, seed, matchup);
+                ReplayJson.Save(Get("out", "artifacts/playtest.json"), new { schemaVersion = "1.0", realismCalibrated = false, engineVersion = new MatchRecord().EngineVersion, sets, initialSeed = seed, seedRule = "set i uses initialSeed+i for every policy; policy draws use a separate stream", result.Rows, result.Shifts });
+                Playtest.Print(result, Console.Out);
+                return result.Rows.Sum(r => r.Failures) == 0 ? 0 : 1;
             }
             case "replay":
                 Print(ReplayJson.Load(Get("input", "artifacts/match.json")), true); return 0;

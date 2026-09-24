@@ -466,6 +466,15 @@ Test("Coaching commands parse settings and reject unknown ones", () =>
     Check(Coach.TryParse("a=aggressive", t, out var u, out _) && u.Target == TargetStyle.TargetBackhand && u.Aggression == Aggression.Aggressive && t.Aggression == Aggression.Safe);
     Check(!Coach.TryParse("a=reckless", t, out _, out _) && !Coach.TryParse("a=7", t, out _, out _) && !Coach.TryParse("aggressive", t, out _, out _) && !Coach.TryParse("x=1", t, out _, out _));
 });
+Test("Automated playtest is deterministic and measures changeovers", () =>
+{
+    var first = Playtest.Run(2, 11, ("baseline", "strong-backhand")); var second = Playtest.Run(2, 11, ("baseline", "strong-backhand"));
+    Check(ReplayJson.Serialize(first) == ReplayJson.Serialize(second), "same seed, same result");
+    Check(first.Rows.Count == Playtest.Policies.Length && first.Rows.All(r => r.Failures == 0 && r.Sets == 2));
+    Check(first.Rows.Where(r => r.Policy.StartsWith("static:")).All(r => r.ChangesA == 0), "static policies keep A's tactic");
+    Check(first.Rows.Single(r => r.Policy == "random").ChangesA > 0);
+    Check(first.Shifts.Count > 0 && first.Shifts.All(s => !double.IsNaN(s.Before) && !double.IsNaN(s.After)));
+});
 Test("Limits terminate diagnostically and never award a fabricated point", () =>
 {
     var r = Run(1, input: new MatchInput { Config = new SimConfig { MaxPointTicks = 1 } });

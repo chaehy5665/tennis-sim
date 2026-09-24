@@ -67,24 +67,32 @@ namespace TennisSim.Core
             s.Energy = Math.Max(.15, s.Energy - displacement.GroundLength * .0008 / (.4 + p.Stamina));
             s.Facing = new Vec3(0, 0, -s.End);
         }
-        public static bool CanContact(PlayerProfile p, PlayerState s, BallState ball, double sinceOpponentHit, SimConfig c) =>
-            sinceOpponentHit + 1e-9 >= p.ReactionSeconds + p.PreparationSeconds && ball.Bounces == 1 &&
+        // A player with time lets the ball rise to a comfortable height, or takes a low bounce at its apex. A rushed
+        // player takes the first legal height instead, which rules out an attacking shot (see ShotPolicy).
+        public const double ComfortableContactHeight = .9;
+        public static bool Comfortable(BallState ball) => ball.Position.Y >= ComfortableContactHeight || ball.Velocity.Y <= 0;
+        // reactionSeconds overrides the profile value when the receiver has read the opponent's pattern.
+        public static bool CanContact(PlayerProfile p, PlayerState s, BallState ball, double sinceOpponentHit, SimConfig c, double? reactionSeconds = null, bool comfortableOnly = false) =>
+            (!comfortableOnly || Comfortable(ball)) &&
+            sinceOpponentHit + 1e-9 >= (reactionSeconds ?? p.ReactionSeconds) + p.PreparationSeconds && ball.Bounces == 1 &&
             ball.Position.Y >= c.MinContactHeight && ball.Position.Y <= c.MaxContactHeight &&
             ball.Position.Z * s.End > 0 && ball.Velocity.Z * s.End > 0 && Vec3.GroundDistance(s.Position, ball.Position) <= c.Reach;
-        public static Vec3 PredictContact(PlayerProfile p, PlayerState s, BallState observed, SimConfig c, double timeSinceHit, out double arrival, out bool reachable, SurfaceEnvironment? surface = null)
+        public static Vec3 PredictContact(PlayerProfile p, PlayerState s, BallState observed, SimConfig c, double timeSinceHit, out double arrival, out bool reachable, SurfaceEnvironment? surface = null, double? reactionSeconds = null, bool comfortableOnly = false)
         {
             var b = observed.Copy(); Vec3 fallback = s.Position; arrival = 0; reachable = false;
+            double reaction = reactionSeconds ?? p.ReactionSeconds;
             const double step = 1.0 / 60;
             for (double t = step; t < 4; t += step)
             {
                 b = BallPhysics.Advance(b, step, c, null, surface);
                 if (b.Bounces >= 2) break;
                 if (b.Bounces != 1 || b.Position.Z * s.End <= 0 || b.Position.Y < c.MinContactHeight || b.Position.Y > c.MaxContactHeight) continue;
+                if (comfortableOnly && !Comfortable(b)) continue;
                 fallback = new Vec3(b.Position.X, 0, b.Position.Z); arrival = t;
-                double travelTime = Math.Max(0, t - Math.Max(0, p.ReactionSeconds - timeSinceHit));
+                double travelTime = Math.Max(0, t - Math.Max(0, reaction - timeSinceHit));
                 double speed = SpeedLimit(p, s), ramp = Math.Max(0, speed - s.Velocity.GroundLength) / p.Acceleration;
                 double distance = travelTime < ramp ? s.Velocity.GroundLength * travelTime + .5 * p.Acceleration * travelTime * travelTime : s.Velocity.GroundLength * ramp + .5 * p.Acceleration * ramp * ramp + speed * (travelTime - ramp);
-                if (Vec3.GroundDistance(s.Position, fallback) <= distance + c.Reach * .65 && timeSinceHit + t >= p.ReactionSeconds + p.PreparationSeconds) { reachable = true; return fallback; }
+                if (Vec3.GroundDistance(s.Position, fallback) <= distance + c.Reach * .65 && timeSinceHit + t >= reaction + p.PreparationSeconds) { reachable = true; return fallback; }
             }
             return fallback;
         }

@@ -137,7 +137,7 @@ internal static class Cli
                 int count = int.Parse(Get("count", "2000")); if (count < 2 || count > 100000) throw new ArgumentException("count must be 2..100000");
                 uint seed = uint.Parse(Get("seed", "100"));
                 var cells = BalanceGrid.Run(count, seed);
-                ReplayJson.Save(Get("out", "artifacts/balance.json"), new { schemaVersion = "1.0", realismCalibrated = false, engineVersion = new MatchRecord().EngineVersion, count, initialSeed = seed, seedRule = "lowbias32(initialSeed+i modulo uint32), shared by every cell", firstServerRule = "i%2", endARule = "(i/2)%2 == 0 ? -1 : +1", cells });
+                ReplayJson.Save(Get("out", "artifacts/balance.json"), new { schemaVersion = "1.0", realismCalibrated = false, engineVersion = new MatchRecord().EngineVersion, count, initialSeed = seed, seedRule = "run i uses initialSeed+i modulo uint32, shared by every cell", runPoints = BalanceGrid.RunPoints, firstServerRule = "run i%2", endARule = "run (i/2)%2 == 0 ? -1 : +1", cells });
                 int failures = cells.Sum(c => c.Failures);
                 Console.WriteLine($"BALANCE cells={cells.Count} pointsPerCell={count} rallyLimits={cells.Sum(c => c.RallyLimits)} failures={failures}");
                 return failures == 0 ? 0 : 1;

@@ -95,6 +95,9 @@ ContactPrepared는 3D 모션 준비의 단서이며 실제 접촉은 BallHit에 
 ## Engine v3 — surface model and bounce diagnostics
 
 tennissim-mvp-3 keeps schema 1.0 and adds optional fields. The viewer accepts tennissim-mvp-1, -2 and -3.
+tennissim-mvp-4 keeps schema 1.0 with no new fields: seed mixing, the tactic model, pattern reading and
+comfortable contact change outcomes only. Candidate lists may now contain a Forehand candidate. The viewer
+accepts tennissim-mvp-1 to -4; resimulate accepts only the current engine version.
 
 - MatchInput.Surface (optional): the surface environment for the explicit impulse model — ball spec, ball
   condition, interaction profile and tolerances. Absent (null) for the legacy multiplicative bounce. It is

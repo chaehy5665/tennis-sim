@@ -356,7 +356,7 @@ public static class Synthetic
         if (spec.TruthBeta == 0) profile.TangentialResponse.Kind = TangentialResponseKind.Zero;
         else { profile.TangentialResponse.Kind = TangentialResponseKind.ConstantBeta; profile.TangentialResponse.Beta = spec.TruthBeta; }
         profile.Validate();
-        var rng = new SeedRandom(spec.Seed);
+        var rng = SeedRandom.Legacy(spec.Seed);
         var records = new List<BounceRecord>();
         double[] speeds = { 8, 12, 16, 20, 24, 30 };
         double[] angles = { 8, 12, 16, 22, 30, 45 };

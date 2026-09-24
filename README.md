@@ -165,3 +165,23 @@ paper and the fitted domain ends at 2.6 m/s.
     PROFILE_RELEASE: BLOCKED
 
 Full detail: [reports/empirical-validation-cross2002.md](reports/empirical-validation-cross2002.md).
+
+
+## Tactic model v4 (2026-09-24)
+
+`EngineVersion` is now tennissim-mvp-4 (schema 1.0 unchanged, viewer accepts v1 to v4). The
+[balance diagnosis](docs/BALANCE_DIAGNOSIS.md) showed that under v3 one tactic (target the backhand) was
+effectively always right, Safe was always wrong, rallies between defenders never ended, and the first random draw
+of every engine was biased by small seeds. v4 changes, all described in [MODEL.md](docs/MODEL.md):
+
+- `SeedRandom` mixes the seed before xorshift32. The calibration tool keeps the old stream (`SeedRandom.Legacy`).
+- TargetBackhand shifts weight between symmetric Backhand and Forehand side candidates without adding displacement.
+- Execution error depends on incoming pace (aggression punishes easy balls and is punished by hard ones, Safe
+  absorbs pace) and grows slowly with rally length.
+- A receiver who sees the same serve or rally direction repeatedly reacts faster (pattern reading).
+- Players wait for a comfortable contact height when they have time; previously every rally ball was taken at
+  about 0.46 m, which disabled the attack candidate.
+
+All v3 replays remain viewable; resimulate refuses them. Tactic balance and rally length are game design targets,
+not empirical calibration: `REALISM_CALIBRATED=false`.
+

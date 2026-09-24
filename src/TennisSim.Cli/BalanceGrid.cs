@@ -2,9 +2,9 @@ using TennisSim.Core;
 
 namespace TennisSim.Cli;
 
-// Tactic balance diagnosis. Each cell plays independent single points through actual Core, exactly like the
-// `points` command. Every cell reuses the same seed list (common random numbers), so differences between cells
-// come from the tactic or player change rather than from different draws.
+// Tactic balance diagnosis. Each cell plays runs of RunPoints consecutive points through actual Core, so fatigue and
+// pattern reading build up within a run. Every cell reuses the same seed list (common random numbers), so differences
+// between cells come from the tactic or player change rather than from different draws.
 public static class BalanceGrid
 {
     public sealed record Cell(string Experiment, string PlayerA, string PlayerB, string TacticA, string TacticB,
@@ -12,7 +12,18 @@ public static class BalanceGrid
         int ServePoints, int ServeWonA, int ReturnPoints, int ReturnWonA, double MeanShots,
         Dictionary<string, int> EndReasons, int RallyLimits, int Failures);
 
+    public const int RunPoints = 10;
     static readonly string[] Presets = { "baseline", "server", "defender" };
+    // Baseline with forehand and backhand swapped: targeting the backhand should not pay against this player.
+    static readonly string[] Opponents = { "baseline", "server", "defender", "strong-backhand" };
+    static PlayerProfile Player(string name, string id)
+    {
+        if (name != "strong-backhand") return PlayerProfile.Preset(name, id);
+        var p = PlayerProfile.Preset("baseline", id); p.Name = "StrongBackhand";
+        (p.ForehandPower, p.BackhandPower) = (p.BackhandPower, p.ForehandPower);
+        (p.ForehandControl, p.BackhandControl) = (p.BackhandControl, p.ForehandControl);
+        return p;
+    }
     static readonly (string Name, Tactic Value)[] Rally =
     {
         ("safe", new Tactic { Aggression = Aggression.Safe }),
@@ -33,7 +44,7 @@ public static class BalanceGrid
     {
         var jobs = new List<(string Experiment, string A, string B, string TacticAName, Tactic TacticA, string TacticBName, Tactic TacticB)>();
         // 1. Every tactic of A against a balanced opponent, for every player matchup.
-        foreach (var a in Presets) foreach (var b in Presets) foreach (var t in Rally.Concat(Serves))
+        foreach (var a in Presets) foreach (var b in Opponents) foreach (var t in Rally.Concat(Serves))
             jobs.Add(("vs-balanced", a, b, t.Name, t.Value, "balanced", new Tactic()));
         // 2. Mirror players, rally tactic against rally tactic: does a counter structure exist?
         foreach (var t in Rally) foreach (var u in Rally)
@@ -45,41 +56,36 @@ public static class BalanceGrid
             var job = jobs[j];
             int won = 0, serve = 0, serveWon = 0, ret = 0, retWon = 0, shots = 0, limits = 0, failures = 0;
             var reasons = new Dictionary<string, int>();
-            for (int i = 0; i < count; i++)
+            int runs = (count + RunPoints - 1) / RunPoints;
+            for (int i = 0; i < runs; i++)
             {
                 var input = new MatchInput
                 {
-                    Seed = Mix(unchecked(seed + (uint)i)),
-                    Players = new[] { PlayerProfile.Preset(job.A, "A"), PlayerProfile.Preset(job.B, "B") },
+                    Seed = unchecked(seed + (uint)i),
+                    Players = new[] { Player(job.A, "A"), Player(job.B, "B") },
                     Tactics = new[] { job.TacticA.Copy(), job.TacticB.Copy() },
                 };
                 input.Config.FirstServer = i % 2; input.Config.InitialEndA = (i / 2) % 2 == 0 ? -1 : 1;
-                var record = new MatchEngine(input, 1).Run();
-                // A point still in play at MaxPointTicks (200 s) is a rally that neither player can end: a balance finding,
-                // not a crash. It is counted separately and excluded from the win rate.
-                if (record.Status == "SimulationLimitExceeded" && record.Diagnostic.Contains("Maximum point duration")) { limits++; continue; }
-                if (record.Status != "PointBatchComplete") { failures++; continue; }
-                bool aWon = record.Stats.Players[0].PointsWon == 1;
-                if (aWon) won++;
-                if (input.Config.FirstServer == 0) { serve++; if (aWon) serveWon++; } else { ret++; if (aWon) retWon++; }
-                shots += record.Stats.Players.Sum(p => p.Shots);
+                var record = new MatchEngine(input, RunPoints).Run();
+                foreach (var e in record.Events.Where(e => e.Kind == "PointEnded"))
+                {
+                    bool aWon = e.PlayerId == "A";
+                    if (aWon) won++;
+                    if (e.State.Score.Server == 0) { serve++; if (aWon) serveWon++; } else { ret++; if (aWon) retWon++; }
+                }
+                shots += record.Stats.RallyLengths.Sum();
                 foreach (var pair in record.Stats.EndReasons) reasons[pair.Key] = reasons.GetValueOrDefault(pair.Key) + pair.Value;
+                // A point still in play at MaxPointTicks (200 s) is a rally that neither player can end: a balance finding,
+                // not a crash. It ends the run, is counted separately and is excluded from the win rate.
+                if (record.Status == "SimulationLimitExceeded" && record.Diagnostic.Contains("Maximum point duration")) limits++;
+                else if (record.Status != "PointBatchComplete" && record.Status != "Completed") failures++;
             }
-            int n = count - limits - failures;
+            int n = serve + ret;
             var (low, high) = Wilson(won, n);
             cells[j] = new Cell(job.Experiment, job.A, job.B, job.TacticAName, job.TacticBName, n, won, n == 0 ? 0 : (double)won / n,
                 low, high, serve, serveWon, ret, retWon, n == 0 ? 0 : (double)shots / n, reasons, limits, failures);
         });
         return cells.ToList();
-    }
-
-    // SeedRandom is xorshift32 seeded directly, so its first output is about seed * 2^-19: for small seeds the first
-    // draw of every point is near zero and always picks the first serve candidate. Diagnostics therefore spread
-    // consecutive seeds over the full 32-bit range (lowbias32 integer hash). Core seeding is unchanged.
-    public static uint Mix(uint x)
-    {
-        x ^= x >> 16; x = unchecked(x * 0x7feb352dU); x ^= x >> 15; x = unchecked(x * 0x846ca68bU); x ^= x >> 16;
-        return x;
     }
 
     // 95% Wilson score interval for a binomial proportion.

@@ -168,3 +168,19 @@ ViewerChecks build results, test and viewer check counts, EditMode and PlayMode 
 full playback of both replays, the controls (pause, restart, speeds, event navigation, seek), the screen
 judgement, the hash comparison from step 2, and the comparator report if the hashes differ. Earlier v1 and v2
 sessions are not evidence for v3.
+
+## 2026-09-24 engine tennissim-mvp-4
+
+Commits after `aa3d32b` produce tennissim-mvp-4 (seed mixing, tactic model, pattern reading, comfortable contact;
+see [MODEL.md](MODEL.md) and [BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md)). The v3 procedure above still
+applies unchanged at commit `9d0d581`; on a later checkout step 2 produces v4 records, which will not match the v3
+hashes. The viewer loader accepts v1 to v4. Linux x64 values for the same two commands at the v4 commit:
+
+| Record | Linux SHA-256 | Result |
+|---|---|---|
+| v4 legacy, seed 42 | 2ba0586cd6769a7c2fefb54615b37b6f8054f4e80b6e9e0774a41c3313ee8147 | B 6-0, 33 points, 1,726 events |
+| v4 impulse, seed 42 | f9f70ee452e5ed4ee2ba73745be69bee9b7e0cfdf6c22fc3b87f875af2f11aee | |
+
+Linux checks at the v4 commit: both records regenerate byte-identically, resimulate with chunk 137 is identical for
+both, ViewerChecks `--general` passes 14/14 on both, and the fixed v1 fixture still passes 14/14. Unity Editor,
+EditMode, PlayMode and screen review remain NOT_RUN for v4.

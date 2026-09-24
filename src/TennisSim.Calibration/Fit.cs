@@ -450,7 +450,7 @@ public static class Fit
         var groups = dataset.Split(config.TrainSplit).Where(r => r.UsableForTangential).GroupBy(r => dataset.GroupOf(r)).ToList();
         if (config.BootstrapResamples > 0 && groups.Count > 1)
         {
-            var rng = new SeedRandom(config.BootstrapSeed);
+            var rng = SeedRandom.Legacy(config.BootstrapSeed);
             var samples = new List<double[]>();
             for (int b = 0; b < config.BootstrapResamples; b++)
             {

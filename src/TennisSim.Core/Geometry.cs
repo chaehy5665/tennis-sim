@@ -49,7 +49,18 @@ namespace TennisSim.Core
     public sealed class SeedRandom
     {
         public uint State { get; private set; }
-        public SeedRandom(uint seed) { State = seed == 0 ? 0x6D2B79F5u : seed; }
+        // xorshift32 seeded directly returns about seed * 2^-19 first, so a small seed biased every first draw toward
+        // the first candidate. The seed is spread over the full state range first (lowbias32 integer hash).
+        public SeedRandom(uint seed) { uint mixed = Mix(seed); State = mixed == 0 ? 0x6D2B79F5u : mixed; }
+        private SeedRandom() { }
+        // Unmixed seeding as used before tennissim-mvp-4. Only the offline calibration tool uses it, so that its
+        // committed synthetic data and bootstrap results stay reproducible; match simulation must not.
+        public static SeedRandom Legacy(uint seed) => new SeedRandom { State = seed == 0 ? 0x6D2B79F5u : seed };
+        public static uint Mix(uint x)
+        {
+            x ^= x >> 16; x = unchecked(x * 0x7feb352dU); x ^= x >> 15; x = unchecked(x * 0x846ca68bU); x ^= x >> 16;
+            return x;
+        }
         public uint NextUInt() { uint x = State; x ^= x << 13; x ^= x >> 17; x ^= x << 5; State = x; return x; }
         public double Next() => NextUInt() / 4294967296.0;
         public double Symmetric() => (Next() + Next() + Next() - 1.5) * 2;

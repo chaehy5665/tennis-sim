@@ -19,7 +19,8 @@ def pct(x):
 
 
 def limit_rate(c):
-    total = c["points"] + c["rallyLimits"] + c["failures"]
+    """Share of points that ended at the rally limit (each limit ends one point and its run)."""
+    total = c["points"] + c["rallyLimits"]
     return c["rallyLimits"] / total if total else 0.0
 
 
@@ -62,7 +63,8 @@ def main():
     out = []
     w = out.append
     w(f"# Tactic balance diagnosis\n")
-    w(f"Source: `{args.input}`, engine {data['engineVersion']}, {data['count']} points per cell, "
+    runs = f", runs of {data['runPoints']} consecutive points" if "runPoints" in data else ""
+    w(f"Source: `{args.input}`, engine {data['engineVersion']}, {data['count']} points per cell{runs}, "
       f"initial seed {data['initialSeed']} (shared by every cell). Win rate = A point win rate excluding rally-limit points; "
       f"95% Wilson interval in brackets. REALISM_CALIBRATED=false.\n")
 

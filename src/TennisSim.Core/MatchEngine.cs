@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using TennisSim.Core.Bounce;
 
@@ -15,6 +16,14 @@ namespace TennisSim.Core
         private readonly Tactic[] tactics;
         private readonly List<TacticInstruction> instructions = new List<TacticInstruction>();
         private readonly int stopAfterPoints;
+        // Pattern reading: each player's recent serve directions and rally target sides. A receiver who has seen the
+        // same choice repeatedly reacts faster. Only the last PatternWindow choices of each kind count.
+        private const int PatternWindow = 10, PatternMinimum = 4;
+        private const double PatternFloor = .4, PatternReadBonus = .6;
+        private readonly List<string>[] servePatterns = { new List<string>(), new List<string>() };
+        private readonly List<string>[] rallyPatterns = { new List<string>(), new List<string>() };
+        private double receiverReaction;
+        private bool receiverComfortable;
         private ServeRules serve = new ServeRules();
         private BallState ball = new BallState();
         private string phase = "BetweenPoints";
@@ -137,7 +146,9 @@ namespace TennisSim.Core
             plan.IntendedTarget = choice.Selected.Target; plan.Candidates = choice.Candidates; plan.Reason = choice.Selected.Name;
             plan.PreparationQuality = preparation;
             var before = Snapshot(time);
-            ball = new BallState { Position = ball.Position, Velocity = ShotPolicy.Execute(choice, self, tactics[player], isServe, serve.Attempt, rng) };
+            double pressure = isServe ? 0 : ShotPolicy.Pressure(ball.Velocity.Length);
+            ball = new BallState { Position = ball.Position, Velocity = ShotPolicy.Execute(choice, self, tactics[player], isServe, serve.Attempt, pressure, pointShots, rng) };
+            receiverReaction = ReadPattern(player, isServe, choice.Selected);
             self.Energy = Math.Max(.15, self.Energy - .002 / (.4 + p.Stamina));
             phase = "Rally";
             var hit = Emit("BallHit", time, player, action: activeAction);
@@ -154,14 +165,17 @@ namespace TennisSim.Core
                 MatchStats.Increment(stats.Choices, choice.Selected.Name); pointShots++;
             }
             foreach (var candidate in choice.Candidates) if (!candidate.Feasible) MatchStats.Increment(stats.CandidateRejections, candidate.Rejection);
-            hitter = player; lastHitTime = time; serveFlight = isServe; receiverPlanned = false; receiverAction = ++actionCounter; phase = "Rally";
+            hitter = player; lastHitTime = time; serveFlight = isServe; receiverPlanned = false; receiverComfortable = false; receiverAction = ++actionCounter; phase = "Rally";
         }
         private void StepBall(double time)
         {
             int receiver = 1 - hitter; var rp = input.Players[receiver];
-            if (!receiverPlanned && time - lastHitTime + 1e-9 >= rp.ReactionSeconds)
+            if (!receiverPlanned && time - lastHitTime + 1e-9 >= receiverReaction)
             {
-                receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out double arrival, out bool reachable, surface);
+                // Plan a comfortable contact first; if it cannot be reached, plan the earliest reachable one (rushed).
+                receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out double arrival, out bool reachable, surface, receiverReaction, comfortableOnly: true);
+                receiverComfortable = reachable;
+                if (!reachable) receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out arrival, out reachable, surface, receiverReaction);
                 receiverPlanned = true;
                 var action = Emit("ContactPrepared", time, receiver, reason: reachable ? "PredictedReachable" : "UnreachableContact", action: receiverAction);
                 action.IntendedTarget = receiverTarget; action.PredictedContactTime = time + arrival;
@@ -224,7 +238,28 @@ namespace TennisSim.Core
                 return;
             }
             double endTime = (tick + 1) * config.TickSeconds;
-            if (!serveFlight && Movement.CanContact(rp, players[receiver], ball, endTime - lastHitTime, config)) Hit(receiver, endTime, false);
+            if (!serveFlight && Movement.CanContact(rp, players[receiver], ball, endTime - lastHitTime, config, receiverReaction, receiverComfortable)) Hit(receiver, endTime, false);
+        }
+        // Records the hitter's choice and returns the receiver's reaction time for this ball. The share of the same
+        // choice in the hitter's recent history, above PatternFloor, shortens reaction by up to PatternReadBonus.
+        private double ReadPattern(int hitter, bool isServe, Candidate selected)
+        {
+            int receiver = 1 - hitter; var rp = input.Players[receiver]; var r = players[receiver];
+            string label = selected.Name;
+            if (!isServe)
+            {
+                double side = selected.Target.X - r.Position.X;
+                label = Math.Abs(side) < 1 ? "Centre" : Court.IsForehand(r.Position, selected.Target, r.End, rp.LeftHanded) ? "ForehandSide" : "BackhandSide";
+            }
+            var history = isServe ? servePatterns[hitter] : rallyPatterns[hitter];
+            double read = 0;
+            if (history.Count >= PatternMinimum)
+            {
+                double share = (double)history.Count(h => h == label) / history.Count;
+                read = Math.Max(0, Math.Min(1, (share - PatternFloor) / (1 - PatternFloor)));
+            }
+            history.Add(label); if (history.Count > PatternWindow) history.RemoveAt(0);
+            return rp.ReactionSeconds * (1 - PatternReadBonus * read);
         }
         private void EndPoint(int winner, string reason, double time)
         {

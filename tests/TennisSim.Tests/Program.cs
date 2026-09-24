@@ -170,8 +170,45 @@ Test("Neutral paired policy: TargetBackhand raises selection for both hands/ends
             if (Choose(new Tactic(), a, left: left, end: end).Selected.Name == "Backhand") baseline++;
             if (Choose(new Tactic { Target = TargetStyle.TargetBackhand }, b, left: left, end: end).Selected.Name == "Backhand") targeted++;
         }
-        Check(targeted > baseline + 400, $"{targeted}/{2000} vs {baseline}/{2000}");
+        Check(targeted > baseline + 200, $"{targeted}/{2000} vs {baseline}/{2000}");
     }
+});
+Test("TargetBackhand moves weight between sides without adding displacement", () =>
+{
+    var a = new SeedRandom(77); var b = new SeedRandom(77); int sidesBalanced = 0, sidesTargeted = 0, forehandTargeted = 0;
+    for (int i = 0; i < 4000; i++)
+    {
+        string x = Choose(new Tactic(), a).Selected.Name, y = Choose(new Tactic { Target = TargetStyle.TargetBackhand }, b).Selected.Name;
+        if (x is "Backhand" or "Forehand") sidesBalanced++;
+        if (y is "Backhand" or "Forehand") sidesTargeted++;
+        if (y == "Forehand") forehandTargeted++;
+    }
+    Check(Math.Abs(sidesTargeted - sidesBalanced) < 200, $"side shots {sidesTargeted} vs {sidesBalanced}");
+    Check(forehandTargeted * 5 < sidesTargeted, $"forehand-side share {forehandTargeted}/{sidesTargeted}");
+});
+Test("Pressure grows with incoming pace; aggression is riskier under pressure", () =>
+{
+    Check(ShotPolicy.Pressure(15) == 0 && ShotPolicy.Pressure(25) == 1 && ShotPolicy.Pressure(17.75) > .4 && ShotPolicy.Pressure(17.75) < .6);
+    var choice = Choose(new Tactic(), new SeedRandom(9)); var self = new PlayerState { Energy = 1 };
+    double Spread(Aggression aggression, double pressure, int shots)
+    {
+        var rng = new SeedRandom(31); double total = 0;
+        for (int i = 0; i < 400; i++) total += (ShotPolicy.Execute(choice, self, new Tactic { Aggression = aggression }, false, 1, pressure, shots, rng) - choice.Selected.LaunchVelocity).Length;
+        return total;
+    }
+    Check(Spread(Aggression.Aggressive, 0, 0) < Spread(Aggression.Balanced, 0, 0), "aggression punishes an easy ball");
+    Check(Spread(Aggression.Aggressive, 1, 0) > Spread(Aggression.Balanced, 1, 0), "aggression is punished by a hard ball");
+    Check(Spread(Aggression.Safe, 1, 0) < Spread(Aggression.Balanced, 1, 0), "safe absorbs pace");
+    Check(Spread(Aggression.Balanced, 0, 20) > Spread(Aggression.Balanced, 0, 0), "long rallies raise error");
+});
+Test("Rushed receivers wait for comfortable height only when they can", () =>
+{
+    var rising = new BallState { Position = new Vec3(0, .5, 11), Velocity = new Vec3(0, 3, 10), Bounces = 1 };
+    var high = new BallState { Position = new Vec3(0, 1.0, 11), Velocity = new Vec3(0, 1, 10), Bounces = 1 };
+    var apex = new BallState { Position = new Vec3(0, .6, 11), Velocity = new Vec3(0, -.1, 10), Bounces = 1 };
+    Check(!Movement.Comfortable(rising) && Movement.Comfortable(high) && Movement.Comfortable(apex));
+    var p = PlayerProfile.Preset("baseline", "A"); var s = new PlayerState { End = 1, Position = new Vec3(0, 0, 11) };
+    Check(Movement.CanContact(p, s, rising, 1, config) && !Movement.CanContact(p, s, rising, 1, config, comfortableOnly: true));
 });
 Test("Aggressive changes feasible attack frequency; Safe changes speed constraints", () =>
 {
@@ -201,8 +238,17 @@ Test("Serve direction weighted policy changes selected course", () =>
 });
 Test("Explicit RNG sequence/state, zero seed is non-degenerate", () =>
 {
-    var rng = new SeedRandom(1); Check(rng.NextUInt() == 270369); Check(rng.NextUInt() == 67634689); Check(rng.State == 67634689);
+    // The seed is mixed (lowbias32 of 1 = 1753845952) before xorshift32; Legacy keeps the unmixed stream.
+    var rng = new SeedRandom(1); Check(rng.NextUInt() == 145099912); Check(rng.NextUInt() == 4024068723); Check(rng.State == 4024068723);
+    var legacy = SeedRandom.Legacy(1); Check(legacy.NextUInt() == 270369); Check(legacy.NextUInt() == 67634689);
     Check(new SeedRandom(0).NextUInt() != 0);
+});
+Test("Small seeds do not bias the first draw", () =>
+{
+    // Unmixed xorshift32 returned about seed * 2^-19 first, so seeds below 1000 all drew under .002.
+    int low = 0; double sum = 0;
+    for (uint seed = 1; seed <= 1000; seed++) { double first = new SeedRandom(seed).Next(); sum += first; if (first < .05) low++; }
+    Check(low < 100, "first draws below .05: " + low); Check(Math.Abs(sum / 1000 - .5) < .05, "mean first draw " + sum / 1000);
 });
 Test("Invalid/nonfinite configuration and identity rejected", () =>
 {

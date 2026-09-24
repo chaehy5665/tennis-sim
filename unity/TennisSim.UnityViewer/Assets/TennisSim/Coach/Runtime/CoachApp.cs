@@ -440,7 +440,7 @@ namespace TennisSim.Coach
             var page = Page(3);
             var v = CoachViews.Review(Session);
             var top = Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true), Box("tsc-grow"),
-                ButtonRow(MakeButton("같은 seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true)));
+                ButtonRow(MakeButton("같은 Seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true)));
             page.Add(Text("경기 리뷰 · " + v.Points + "포인트 · " + (v.Winner == 0 ? "승리" : "패배"), "tsc-label", "tsc-on-ground-muted"));
             page.Add(top);
 

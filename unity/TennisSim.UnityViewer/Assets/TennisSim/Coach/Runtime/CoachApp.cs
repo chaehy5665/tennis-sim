@@ -88,12 +88,18 @@ namespace TennisSim.Coach
 
         // ---------- helpers ----------
         static VisualElement Box(params string[] classes) { var e = new VisualElement(); foreach (var c in classes) e.AddToClassList(c); return e; }
-        static Label Text(string text, params string[] classes) { var l = new Label(text); foreach (var c in classes) l.AddToClassList(c); return l; }
+        // The label style is uppercase; USS has no text-transform, so the bound string is converted (Korean is unaffected).
+        static Label Text(string text, params string[] classes)
+        {
+            var l = new Label(Array.IndexOf(classes, "tsc-label") >= 0 ? text.ToUpperInvariant() : text);
+            foreach (var c in classes) l.AddToClassList(c);
+            return l;
+        }
         Label Number(string text, string cls) { var l = Text(text, cls); l.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(mono)); return l; }
         static Label Badge(int player) => Text(player == 0 ? "A" : "B", "tsc-label", "tsc-badge", player == 0 ? "tsc-badge--a" : "tsc-badge--b");
         static Button MakeButton(string text, Action onClick, bool primary)
         {
-            var b = new Button(onClick) { text = text };
+            var b = new Button(onClick) { text = text.ToUpperInvariant() };
             b.AddToClassList("tsc-button"); b.AddToClassList(primary ? "tsc-button--primary" : "tsc-button--secondary");
             return b;
         }
@@ -221,7 +227,7 @@ namespace TennisSim.Coach
             var controls = Row();
             controls.style.borderTopWidth = 1; controls.style.borderTopColor = Hex("#8c969e"); controls.style.paddingTop = 16;
             var pause = MakeButton(Paused ? "재생" : "일시정지", null, true);
-            pause.clicked += () => { Paused = !Paused; pause.text = Paused ? "재생" : "일시정지"; };
+            pause.clicked += () => { Paused = !Paused; pause.text = (Paused ? "재생" : "일시정지").ToUpperInvariant(); };
             controls.Add(pause);
             var speeds = Box("tsc-row");
             void DrawSpeeds()

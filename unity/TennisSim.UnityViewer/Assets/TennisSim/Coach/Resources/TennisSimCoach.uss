@@ -1,5 +1,5 @@
-/* TennisSim Coach UI design system (tokens v2): colours, type steps, spacing and radii by token name.
-   USS has no line-height or text-transform; labels are Korean, so the uppercase rule has no effect. */
+/* TennisSim Coach UI design system (tokens v2) with its Unity UI Toolkit rules (project/unity.md):
+   min-height stands in for line-height, C# uppercases label text, focus keeps the element size. */
 :root {
     --ground: #060b11;
     --court: #144040;
@@ -23,12 +23,12 @@
 .tsc-root .unity-text-element { color: var(--line); white-space: normal; margin: 0; padding: 0; }
 
 /* Type */
-.tsc-root .tsc-headline { font-size: 28px; -unity-font-style: bold; letter-spacing: -0.28px; }
-.tsc-root .tsc-title { font-size: 18px; -unity-font-style: bold; }
-.tsc-root .tsc-body { font-size: 15px; }
-.tsc-root .tsc-label { font-size: 12px; -unity-font-style: bold; letter-spacing: 0.72px; }
-.tsc-root .tsc-score { font-size: 40px; -unity-font-style: bold; }
-.tsc-root .tsc-stat { font-size: 14px; }
+.tsc-root .tsc-headline { font-size: 28px; -unity-font-style: bold; letter-spacing: -0.28px; min-height: 34px; }
+.tsc-root .tsc-title { font-size: 18px; -unity-font-style: bold; min-height: 24px; }
+.tsc-root .tsc-body { font-size: 15px; min-height: 22px; }
+.tsc-root .tsc-label { font-size: 12px; -unity-font-style: bold; letter-spacing: 0.72px; min-height: 16px; }
+.tsc-root .tsc-score { font-size: 40px; -unity-font-style: bold; min-height: 44px; }
+.tsc-root .tsc-stat { font-size: 14px; min-height: 20px; }
 .tsc-root .tsc-muted { color: var(--line-muted); }
 /* net text only on ground */
 .tsc-root .tsc-on-ground-muted { color: var(--net); }
@@ -61,12 +61,16 @@
 .tsc-root .tsc-chip--selected .unity-text-element { color: var(--on-selected); }
 
 /* Buttons */
-.tsc-root .tsc-button { min-height: 48px; padding: 0 32px; border-radius: 4px; margin: 0 0 0 8px; -unity-font-style: bold; font-size: 13px; }
+.tsc-root .tsc-button { min-height: 48px; padding: 0 32px; border-radius: 4px; margin: 0 0 0 8px; -unity-font-style: bold; font-size: 12px; letter-spacing: 0.72px; }
 .tsc-root .tsc-button--primary { background-color: var(--selected); color: var(--on-selected); border-width: 0; }
 .tsc-root .tsc-button--secondary { background-color: var(--ground); color: var(--line); border-width: 1px; border-color: var(--line); }
 
-/* Keyboard focus: ball ring. USS has no outline, so the border takes the ring colour. */
-.tsc-root .tsc-chip:focus, .tsc-root .tsc-button:focus { border-width: 2px; border-color: var(--ball); }
+/* Keyboard focus: ball ring. USS has no outline, so a 2px ball border takes its place and the padding shrinks by
+   the border growth so the element keeps its size (chip 1px -> 2px, secondary 1px -> 2px, primary 0 -> 2px).
+   A selected chip keeps its selected fill; only the border turns ball. */
+.tsc-root .tsc-chip:focus { border-width: 2px; border-color: var(--ball); padding: 7px; }
+.tsc-root .tsc-button--secondary:focus { border-width: 2px; border-color: var(--ball); padding: 0 31px; }
+.tsc-root .tsc-button--primary:focus { border-width: 2px; border-color: var(--ball); padding: 0 30px; }
 
 /* InfoBanner */
 .tsc-banner { flex-direction: row; background-color: var(--info-surface); border-width: 1px; border-color: var(--info-border); border-radius: 0; padding: 16px; }

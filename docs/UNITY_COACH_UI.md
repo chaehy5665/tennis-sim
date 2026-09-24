@@ -39,10 +39,11 @@ Core만 결정하고, UI는 기록을 읽어 그린다.
 
 ## 디자인 시스템 적용
 
-`TennisSimCoach.uss`의 `:root` 변수가 토큰 v2다. Chip(비선택은 court·control-border·line-muted, 선택은
+`TennisSimCoach.uss`의 `:root` 변수가 토큰 v2이고, 디자인 시스템의 Unity 규칙(project/unity.md)을 따른다: 포커스 때
+테두리가 두꺼워진 만큼 padding을 줄여 크기를 유지하고, label 문자열은 C#에서 `ToUpperInvariant()`로 바꾸고,
+한 줄 요소는 `min-height`로 줄 높이를 맞춘다. Chip(비선택은 court·control-border·line-muted, 선택은
 selected·on-selected), InfoBanner(info-surface·info-border), 히트맵(친 선수 색 채움 = 백핸드 공략, line-muted 빈 원 =
-그 외, line 빈 원 = 아웃, 범례 글자 포함)을 따른다. USS에는 outline, line-height, text-transform이 없다.
-그래서 포커스 링은 ball 색 2px 테두리로 대신하고, 줄 높이와 대문자 규칙은 적용하지 않았다.
+그 외, line 빈 원 = 아웃, 범례 글자 포함)을 따른다. USS에 outline이 없어서 포커스 링은 ball 색 2px 테두리로 대신한다.
 
 한글: 디자인 시스템은 시스템 산세리프만 지정한다. Unity 기본 런타임 폰트에는 한글이 없으므로
 `Font.CreateDynamicFontFromOSFont`로 OS 폰트를 쓴다(macOS Apple SD Gothic Neo, Windows Malgun Gothic 순).

@@ -200,3 +200,18 @@ commands:
 Linux checks: both records regenerate byte-identically, resimulate with chunk 137 is identical for both,
 ViewerChecks `--general` passes 14/14 on both, and the tracked fixture `StreamingAssets/Replays/sample-42.json`
 still passes 14/14. Unity compile, EditMode, PlayMode and the coach UI on the Mac are NOT_RUN for v5.
+
+## 2026-09-24 engine tennissim-mvp-6
+
+The serve reading change and the planned stroke on `ContactPrepared` (see [BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md),
+"v6 결과") produce tennissim-mvp-6 records. `ReplayLoader` now accepts v1 to v6; that is the only Unity source change.
+Linux x64 values:
+
+| Record | Linux SHA-256 | Result |
+|---|---|---|
+| v6 legacy, seed 42 | ce01ddf417123c9ba7f1120fa8278eee691942909025f6702fbeaadffe7daf24 | B 6-0, 37 points, 1,736 events |
+| v6 impulse, seed 42 | 01085eb9d7bf2b392b0d9b13fd1fafb3cd6bb082ee0e4818a079333480b14c7e | B 6-1, 35 points, 2,072 events |
+
+Linux checks: both records regenerate byte-identically, resimulate with chunk 137 is identical for both,
+ViewerChecks `--general` passes 14/14 on both, and the tracked fixture `StreamingAssets/Replays/sample-42.json`
+still passes 14/14. Unity compile, EditMode, PlayMode and the coach UI on the Mac are NOT_RUN for v5 and v6.

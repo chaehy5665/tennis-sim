@@ -243,6 +243,29 @@ Test("A rally shot aimed at a side is played on that side", () =>
     // Before tennissim-mvp-5 receivers stood on the ball and followed the aimed side about 69% of the time.
     Check(aimed > 100 && followed >= .95 * aimed, $"followed {followed}/{aimed}");
 });
+Test("ContactPrepared names the stroke the receiver sets up for", () =>
+{
+    var events = Run(4).Events; var hits = events.Where(e => e.Kind == "BallHit").ToDictionary(e => e.ActionId);
+    var prepared = events.Where(e => e.Kind == "ContactPrepared").ToList(); int matched = 0, played = 0;
+    Check(prepared.Count > 100 && prepared.All(e => e.Stroke is "Forehand" or "Backhand"));
+    foreach (var e in prepared) if (hits.TryGetValue(e.ActionId, out var hit)) { played++; if (hit.Stroke == e.Stroke) matched++; }
+    Check(played > 100 && matched >= .95 * played, $"planned stroke played {matched}/{played}");
+});
+Test("Receivers lean toward the side a server keeps serving to", () =>
+{
+    // Mean receiver distance from the centre line when A serves, after A's first few serves are known.
+    double Lean(ServeDirection direction)
+    {
+        var input = new MatchInput(); input.Players[1] = PlayerProfile.Preset("baseline", "B"); input.Tactics[0] = new Tactic { Serve = direction };
+        var starts = Run(5, input: input).Events.Where(e => e.Kind == "PointStarted" && e.PlayerId == "A").Skip(4).ToList();
+        Check(starts.Count > 10);
+        return starts.Average(e => Math.Abs(e.State.Players[1].Position.X));
+    }
+    double wide = Lean(ServeDirection.Wide), mixed = Lean(ServeDirection.Mixed), t = Lean(ServeDirection.T);
+    Check(wide > mixed + .5 && mixed > t + .5, $"wide {wide:F2} mixed {mixed:F2} t {t:F2}");
+    // Before any serve history the receiver starts at the v5 position.
+    var first = Run(5).Events.First(e => e.Kind == "PointStarted"); Near(Math.Abs(first.State.Players[1 - first.State.Score.Server].Position.X), 1.5);
+});
 Test("Aggressive changes feasible attack frequency; Safe changes speed constraints", () =>
 {
     int safe = 0, aggressive = 0; double sv = 0, av = 0;
@@ -448,7 +471,9 @@ Test("Opponent coach: reads scouting and style, consumes no randomness, re-simul
     Check(first.Aggression == Aggression.Aggressive, "attacks a Safe opponent");
     Check(first.Target == TargetStyle.TargetBackhand, "scouting: baseline backhand is weaker");
     var s2 = Coached(5, strong, new Tactic { Aggression = Aggression.Aggressive });
-    var firstStrong = s2.InstructionHistory.FirstOrDefault(i => i.Player == 1)?.Value ?? new Tactic();
+    // The first changeover decides from scouting (too few strokes to measure); later decisions read measured errors.
+    int firstChangeover = s2.Events.First(e => e.Kind == "EndsChanged").Point;
+    var firstStrong = s2.InstructionHistory.FirstOrDefault(i => i.Player == 1 && i.AppliedPoint == firstChangeover + 1)?.Value ?? new Tactic();
     Check(firstStrong.Target == TargetStyle.Balanced && firstStrong.Aggression == Aggression.Balanced, "no backhand targeting against a strong backhand; balanced against aggression");
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Coached(5, baseline, new Tactic { Aggression = Aggression.Safe })), "deterministic");
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Run(5, 137, r.Input)), "AI-coached replay re-simulates from its recorded instructions");
@@ -525,11 +550,14 @@ Test("Diagnostics catch actual out-of-reach state and exclude resets/dt zero", (
     var report = Diagnostics.Analyze(copy, "injected.json", "test", "test-source");
     Check(report.Checks["CONTACT_REACH"].Failures == 1);
     // Same-time duplicated frame is legal; point reset itself must not count as fast movement.
+    // A match that ends one tick after a snapshot already has one same-time pair (the final frame), so count relative.
+    int SameTime(MatchRecord m) { var e = Diagnostics.Analyze(m, "s.json", "test", "test-source").Metrics["A.movementDistance"].Excluded; return e.TryGetValue("dt<=0", out var n) ? n : 0; }
+    int natural = SameTime(sample!);
     copy = ReplayJson.Deserialize<MatchRecord>(ReplayJson.Serialize(sample));
     copy.Frames.Insert(1, copy.Frames[0]);
     report = Diagnostics.Analyze(copy, "duplicate.json", "test", "test-source");
     Check(report.Checks["PLAYER_DISPLACEMENT"].Failures == 0);
-    Check(report.Metrics["A.movementDistance"].Excluded["dt<=0"] == 1);
+    Check(report.Metrics["A.movementDistance"].Excluded["dt<=0"] == natural + 1);
 });
 Test("Diagnostic parser rejects missing velocity instead of observing zero", () =>
 {

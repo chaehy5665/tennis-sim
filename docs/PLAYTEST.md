@@ -86,6 +86,19 @@ A가 baseline이나 server일 때는 가장 좋은 고정 전술과 비슷하다
 **4. 상대 AI 안정성.** 세트당 변경 1.40회, 공격 방향 변경 0.96회, 공격 방향을 되돌린 세트 9.0%. Debug 세션의 AI
 안정화(`team/coach-ai`) 전 기준값이다.
 
+## v6 (engine `tennissim-mvp-6`, 40세트, seed 100)
+
+`artifacts/pt-lean100.json`(serve 브랜치). 서브 위치 읽기만 바뀌었다([BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md) "v6 결과").
+
+- 서브 전술(Mixed, Wide, Body, T 고정) 중 최선: v5 Wide 8, Mixed 2, Body 1, T 1 → v6 Wide 4, Mixed 6, T 2.
+  Wide − Mixed 매치업 평균 +1.29%p → +0.33%p.
+- 고정 전술 전체의 최선: backhand 3, strong 3, balanced 3, serve-wide 1, backhand-safe 1, safe 1. 한 전술이 최대
+  3개다.
+- `reader` − 균형 고정 +1.0%p, `reader` − 최선 고정 −2.7%p. `reader`는 상대 AI 규칙을 그대로 쓰므로 AI 안정화
+  작업에서 다시 본다.
+- 서브 코스 변경의 가시성은 그대로 낮다(구간 서브 포인트 득점률로는 신호/잡음 0.08~0.31). 대신 받는 선수의 준비
+  위치가 읽기 결과를 그대로 보여 주므로, UI는 이 위치를 신호로 쓸 수 있다.
+
 ## 다음 판단에 쓰는 기준
 
 아래가 모두 맞으면 Mac 손 플레이 테스트를 다시 한다.

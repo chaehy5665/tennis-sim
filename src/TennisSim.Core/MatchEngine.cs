@@ -21,6 +21,10 @@ namespace TennisSim.Core
         // same choice repeatedly reacts faster. Only the last PatternWindow choices of each kind count.
         private const int PatternWindow = 10, PatternMinimum = 4;
         private const double PatternFloor = .4, PatternReadBonus = .6;
+        // Serve reading also moves the receiver: before each serve the receiver steps toward the wide side by
+        // ServeLean times (Wide share - T share) of the server's recent serves. A server who keeps going wide finds the
+        // receiver waiting there and the T open; a mixed server keeps the receiver in the middle.
+        private const double ServeLean = 1.0;
         private readonly List<string>[] servePatterns = { new List<string>(), new List<string>() };
         private readonly List<string>[] rallyPatterns = { new List<string>(), new List<string>() };
         private double receiverReaction;
@@ -146,7 +150,9 @@ namespace TennisSim.Core
             {
                 players[i].End = i == 0 ? score.EndA : -score.EndA;
                 double x = score.DeuceSide ? -players[i].End : players[i].End;
-                players[i].Position = new Vec3(x * (i == score.Server ? 1.1 : 1.5), 0, players[i].End * (i == score.Server ? 12.15 : 12.7));
+                // For the receiver, +x is the wide side of this serve; see ServeLean.
+                double lateral = i == score.Server ? 1.1 : 1.5 + ServeLean * ServeLeaning(score.Server);
+                players[i].Position = new Vec3(x * lateral, 0, players[i].End * (i == score.Server ? 12.15 : 12.7));
                 players[i].Velocity = new Vec3(); players[i].Facing = new Vec3(0, 0, -players[i].End);
             }
             ball = new BallState { Position = players[score.Server].Position + new Vec3(0, 2.65, 0) };
@@ -197,10 +203,13 @@ namespace TennisSim.Core
                 receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out double arrival, out bool reachable, surface, receiverReaction, comfortableOnly: true);
                 receiverComfortable = reachable;
                 if (!reachable) receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out arrival, out reachable, surface, receiverReaction);
+                bool plannedForehand = Court.IsForehand(players[receiver].Position, receiverTarget, players[receiver].End, rp.LeftHanded);
                 receiverTarget = Movement.Stance(rp, players[receiver], receiverTarget);
                 receiverPlanned = true;
                 var action = Emit("ContactPrepared", time, receiver, reason: reachable ? "PredictedReachable" : "UnreachableContact", action: receiverAction);
                 action.IntendedTarget = receiverTarget; action.PredictedContactTime = time + arrival;
+                // The stroke the receiver is setting up for; BallHit.Stroke is what was actually played.
+                action.Stroke = plannedForehand ? "Forehand" : "Backhand";
             }
             movementStart = new[] { players[0].Copy(), players[1].Copy() };
             for (int i = 0; i < 2; i++)
@@ -282,6 +291,13 @@ namespace TennisSim.Core
             }
             history.Add(label); if (history.Count > PatternWindow) history.RemoveAt(0);
             return rp.ReactionSeconds * (1 - PatternReadBonus * read);
+        }
+        // Wide share minus T share of the server's recent serves, 0 until PatternMinimum serves are known.
+        private double ServeLeaning(int server)
+        {
+            var history = servePatterns[server];
+            if (history.Count < PatternMinimum) return 0;
+            return (double)(history.Count(h => h == "Wide") - history.Count(h => h == "T")) / history.Count;
         }
         private void EndPoint(int winner, string reason, double time)
         {

@@ -30,7 +30,7 @@
 
 - `PlayersRepositioned`: 서브 준비에서의 명시적 위치/속도 초기화. 이 사건을 가로질러 걸어간 것으로 보간하지 않는다.
 - `PointStarted`, `ServeStarted`: 포인트/서브 시작. 서브 토스/실제 라켓 애니메이션은 없다.
-- `ContactPrepared`: 반응 시간이 지난 뒤 현재 관측으로 계산한 목표 몸 위치 및 예상 타격 시각(`predictedContactTime`). 예정일 뿐, 타격 보장이 아니다. reason=PredictedReachable 또는 UnreachableContact. 실제 타격과 같은 actionId를 가진다. 놓친 공에는 BallHit이 뒤따르지 않는다.
+- `ContactPrepared`: 반응 시간이 지난 뒤 현재 관측으로 계산한 목표 몸 위치 및 예상 타격 시각(`predictedContactTime`). mvp-6부터 `stroke`에 준비하는 스트로크(Forehand/Backhand)를 넣는다. 3D 준비 동작(백스윙 방향)의 단서이며, 다르면 BallHit.Stroke가 우선한다(mvp-6에서 약 99% 일치). 예정일 뿐, 타격 보장이 아니다. reason=PredictedReachable 또는 UnreachableContact. 실제 타격과 같은 actionId를 가진다. 놓친 공에는 BallHit이 뒤따르지 않는다.
 - `ShotPlanned`: 실제 타점에서의 확정 선택, 후보별 target/launchVelocity/flightSeconds/weight/feasible/rejection. 목표는 intendedTarget, 선택 후보는 reason. 접촉 직전에 나오는 결정이므로 선행 애니메이션 예고로 쓰지 않는다.
 - `BallHit`: actionId, playerId, ShotKind(Serve/Return/Groundstroke), Stroke(Serve/Forehand/Backhand), IntendedTarget, PreparationQuality. State.Ball.Position/Velocity는 실제 타점과 타격 직후 속도. State.Players에서 몸 위치와 방향을 얻는다. Before는 타격 직전 상태다.
 - `BallBounced`, `NetTouched`: 보간 계산된 충돌 time, 충돌 직전 Before/직후 State. 위치는 연속이고 속도는 impulse로 불연속. 첫 착지는 BallBounced의 Bounces=1, actual position은 State.Ball.Position이다. 해당 타격의 actionId를 유지한다.
@@ -102,6 +102,9 @@ tennissim-mvp-5 keeps schema 1.0 with no new fields. The receiver now moves to a
 contact (0.35 m to the side of the chosen stroke) instead of onto it, so `ContactPrepared` target body positions
 and contact distances differ, and preparation quality measures distance from that stance. Outcomes change;
 event kinds and meanings do not. The viewer accepts tennissim-mvp-1 to -5.
+tennissim-mvp-6 keeps schema 1.0. `ContactPrepared.stroke` now names the planned stroke (it was empty), and the
+receiver's serve-preparation position leans toward the server's recent serve courses. Outcomes change; event kinds
+do not. The viewer accepts tennissim-mvp-1 to -6.
 
 - MatchInput.Surface (optional): the surface environment for the explicit impulse model — ball spec, ball
   condition, interaction profile and tolerances. Absent (null) for the legacy multiplicative bounce. It is

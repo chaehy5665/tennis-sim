@@ -202,6 +202,14 @@ of every engine was biased by small seeds. v4 changes, all described in [MODEL.m
 All v3 replays remain viewable; resimulate refuses them. Tactic balance and rally length are game design targets,
 not empirical calibration: `REALISM_CALIBRATED=false`.
 
+## Serve reading v6 (2026-09-24)
+
+`EngineVersion` is now tennissim-mvp-6 (schema 1.0 unchanged, viewer accepts v1 to v6). The receiver now stands for
+each serve toward the side the server has been serving to (up to 1.0 m from the usual 1.5 m), so a server who always
+goes wide finds the receiver waiting there. Serve Wide was the best serve tactic in 8 of 12 matchups; it is now best in
+4, Mixed in 6 ([BALANCE_DIAGNOSIS.md](docs/BALANCE_DIAGNOSIS.md), "v6 결과"). `ContactPrepared` also records the
+planned stroke for animation. v5 replays remain viewable; resimulate refuses them.
+
 ## Receiver stance v5 (2026-09-24)
 
 `EngineVersion` is now tennissim-mvp-5 (schema 1.0 unchanged, viewer accepts v1 to v5). A receiver used to run onto

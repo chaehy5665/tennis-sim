@@ -90,7 +90,7 @@ namespace TennisSim.Core
     public sealed class MatchRecord
     {
         public string SchemaVersion { get; set; } = "1.0";
-        public string EngineVersion { get; set; } = "tennissim-mvp-5";
+        public string EngineVersion { get; set; } = "tennissim-mvp-6";
         public string Rules { get; set; } = "Singles; one set; advantage games; 6 games by 2; 6-6 seven-point tiebreak by 2; service lets";
         public bool RealismCalibrated { get; set; }
         public MatchInput Input { get; set; } = new MatchInput();

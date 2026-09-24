@@ -5,11 +5,11 @@
 (https://claude.ai/artifact/7CHzTq4k81XYbUU416mafM, 토큰 v2)을 Unity UI Toolkit으로 옮겼다.
 
 ```text
-IMPLEMENTATION_STATUS: SOURCE_IMPLEMENTED_UNVERIFIED
+IMPLEMENTATION_STATUS: UNITY_VERIFIED_WITH_LAYOUT_ISSUES
 APP_LAYER_CHECKS: PASS (tests/TennisSim.CoachChecks 12/12, C# 9, warnings as errors, actual Core)
-UNITY_COMPILE_RESULT: NOT_RUN (no Unity Editor on the Linux host)
-UNITY_PLAYMODE_TEST_RESULT: NOT_RUN
-UNITY_VISUAL_VERIFIED: false
+UNITY_COMPILE_RESULT: PASS (Mac, Unity 6000.6.0f1, 2026-09-24, error CS 0)
+UNITY_PLAYMODE_TEST_RESULT: PASS (EditMode 4/4, PlayMode 3/3, validate-unity-viewer.sh all exit 0)
+UNITY_VISUAL_VERIFIED: true at 1280x800 1x; 2x Retina NOT_RUN; 8 layout issues open (see Mac 확인 결과)
 ```
 
 ## 구조
@@ -21,9 +21,9 @@ Core만 결정하고, UI는 기록을 읽어 그린다.
 |---|---|---|---|
 | Core DLL | `Coach/Plugins/TennisSim.Core.dll` (생성물, gitignore) | 없음 | Core 테스트 70개 |
 | 앱 계층 `TennisSim.Coach.App` | `Coach/App/*.cs` | 없음 (`noEngineReferences`) | .NET `tests/TennisSim.CoachChecks`가 같은 소스를 C# 9로 컴파일해 실행 |
-| Unity 계층 `TennisSim.Coach` | `Coach/Runtime/*.cs`, `Coach/Resources/*.uss,*.tss` | UI Toolkit | Mac에서 컴파일과 PlayMode 필요 |
+| Unity 계층 `TennisSim.Coach` | `Coach/Runtime/*.cs`, `Coach/Resources/*.uss,*.tss` | UI Toolkit | Mac 컴파일 통과 |
 | Editor | `Coach/Editor/CoachSceneSetup.cs` | Editor | 메뉴 TennisSim > Create or open coach scene |
-| PlayMode 테스트 | `Coach/Tests/PlayMode` | Test Framework | 미실행 |
+| PlayMode 테스트 | `Coach/Tests/PlayMode` (Core DLL을 precompiled 참조로 명시) | Test Framework | Mac 통과 |
 
 - `CoachSession`: 경기 전 → 진행 → 체인지오버 → 종료 상태 기계. 프레임 시간만큼 tick을 진행하다가
   (`MatchEngine.AdvanceUntilChangeover`) 체인지오버에서 멈춘다. 그때 상대 코치(`OpponentCoach.DecideWithReasons`)가
@@ -67,8 +67,14 @@ selected·on-selected), InfoBanner(info-surface·info-border), 히트맵(친 선
 git pull --ff-only
 scripts/sync-core-to-unity.sh            # Core DLL 생성과 복사
 export UNITY_EDITOR="/Applications/Unity/Hub/Editor/6000.6.0f1/Unity.app/Contents/MacOS/Unity"
+export TENNISSIM_CANDIDATE_REPLAY="$PWD/unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/sample-42.json"
 scripts/validate-unity-viewer.sh all     # 이제 코치 씬 생성과 Coach PlayMode 테스트도 포함
 ```
+
+`TENNISSIM_CANDIDATE_REPLAY`가 없으면 리플레이 뷰어의 candidate 테스트가 Skipped가 되고,
+`check-unity-test-results.py`는 skip도 실패로 보므로 EditMode에서 멈춰 PlayMode까지 가지 않는다. 코치 UI만 확인할
+때는 추적 중인 고정 리플레이 `sample-42.json`을 넣는다. 이것은 candidate 검증이 아니다. 실제 candidate는
+[UNITY_VALIDATION.md](UNITY_VALIDATION.md)를 따른다.
 
 `validate-unity-viewer.sh`는 prepare 단계에서 DLL을 다시 동기화한다. compile 단계 뒤 `CoachSceneSetup.Setup`을
 실행해 `TENNISSIM_COACH_SCENE_READY`를 확인하고, PlayMode에서 `TennisSim.Coach.PlayMode`도 돌린다.
@@ -84,3 +90,38 @@ Editor에서 처음 열면 새 파일들의 `.meta`가 생성된다. 그 `.meta`
    잘리는 곳이 없는지. 폰트 가져오기 설정이 Dynamic인지.
 
 결과는 이 문서에 새 절로 기록한다. 확인 전에는 위 상태 줄을 바꾸지 않는다.
+
+## Mac 확인 결과 (2026-09-24)
+
+Unity 6000.6.0f1, Color Space Gamma. Game 뷰 1280×800, 1x(물리 픽셀 1:1). 커밋 a0a11cd 기준.
+
+- 빌드와 테스트: `validate-unity-viewer.sh all` exit 0. 컴파일 오류 0건. `overrideReferences`를 켠 뒤에도 NUnit 참조가
+  들어온다. EditMode 4/4, PlayMode 3/3 통과(`CoachPlayModeTests.PreMatchChangeoverAndReviewScreensBuild` 포함).
+  `TENNISSIM_SCENE_READY`와 `TENNISSIM_COACH_SCENE_READY`를 확인했다. 증거는 Mac의
+  `artifacts/unity-validation/editor-20260924T101528-el3s6h`.
+- 화면 1~5: 모두 동작한다. 같은 seed로 다시 돌리면 첫 포인트들이 같다.
+- 디자인 시스템 확인 항목은 모두 통과했다.
+  - 서체 4개가 Dynamic이고 Include Font Data가 켜져 있다. Console에 font missing, 경고, 에러가 없다.
+  - `·`와 `–`가 정상으로 나온다. 굵기가 이중으로 겹치지 않는다.
+  - 16×에서 점수 칸 오른쪽 끝이 고정된다(0/15/30/40/AD).
+  - ScreenCapture PNG에서 잰 여섯 색이 토큰 hex와 정확히 일치한다.
+  - 포커스 때 바뀌는 픽셀은 칩 테두리 영역 안에만 있어 크기와 위치가 변하지 않는다. 선택 칩과 primary 버튼 모두 같다.
+  - 1px 테두리가 선명하다. 배너, 서브권 점, StepNav, 히트맵(청록 없음, 범례 글자)이 규칙대로 나온다.
+- 스크린샷 6장은 Mac 로컬 `artifacts/unity-visual/coach-20260924-mac/`에 있다(gitignore).
+- 확인하지 않은 것: 2x Retina 창.
+
+열린 레이아웃 문제. 디자인 시스템 v10의 unity.md "Mac 확인 기록"과 README "글과 배치"에 규칙이 있고, 수정은 UI
+세션이 맡는다.
+
+1. 체인지오버 오른쪽 패널의 "적용하고 계속" 버튼이 패널 밖으로 약 23px 나간다.
+2. 같은 패널의 부제가 단어 중간에서 끊긴다("다음 체인/지오버"). 그 아래 "공격 방향" label과 간격이 없다.
+3. 배너 아이콘이 "I"로 나온다. `tsc-label`이 대문자로 바꾸기 때문이다(`CoachApp.cs`의 `Text("i", "tsc-label", ...)`).
+4. 한글이 음절 단위로 줄바꿈된다("읽/히지", "바꿉니/다").
+5. 리뷰에서 한 게임짜리 구간 카드가 좁아 줄바꿈이 심하고 카드 높이가 제각각이다.
+6. 리뷰 히트맵의 코트 그림 아래쪽이 잘린다. 의도한 것인지 확인해야 한다.
+7. 경기 화면 아래쪽 약 35%가 비어 있다.
+8. 체인지오버 제목 "Rook"과 B 배지 사이에 간격이 없다.
+
+히트맵의 "백핸드 공략" 수는 버그가 아니다. Core는 균형 전술에서도 상대 백핸드 쪽 후보를 가중치 2로
+고른다(백핸드 공략 전술은 3.6). 뷰는 `hit.Reason == "Backhand"`인 샷을 센다. 그래서 이 수는 전술이 아니라 겨냥한
+방향이다. 디자인 시스템은 범례를 "백핸드 쪽 샷 / 그 외 / 아웃"으로 정했다.

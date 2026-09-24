@@ -13,10 +13,13 @@ public static class BalanceGrid
         Dictionary<string, int> EndReasons, int RallyLimits, int Failures);
 
     public const int RunPoints = 10;
-    internal static readonly string[] Presets = { "baseline", "server", "defender" };
-    // Baseline with forehand and backhand swapped: targeting the backhand should not pay against this player.
-    internal static readonly string[] Opponents = { "baseline", "server", "defender", "strong-backhand" };
-    internal static PlayerProfile Player(string name, string id)
+    // Every archetype plays every archetype (docs/PLAYER_TYPES.md). The legacy server and defender presets are out of
+    // the roster's strength band, so tactics barely matter in their matchups; they are no longer in the grid.
+    internal static readonly string[] Presets = PlayerProfile.Archetypes;
+    internal static readonly string[] Opponents = PlayerProfile.Archetypes;
+    // Any preset name, plus strong-backhand: the older name of the backhander (same numbers, different display name).
+    internal static bool Known(string name) => name == "strong-backhand" || PlayerProfile.Archetypes.Contains(name) || PlayerProfile.LegacyPresets.Contains(name);
+    public static PlayerProfile Player(string name, string id)
     {
         if (name != "strong-backhand") return PlayerProfile.Preset(name, id);
         var p = PlayerProfile.Preset("baseline", id); p.Name = "StrongBackhand";

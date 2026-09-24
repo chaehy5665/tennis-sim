@@ -1,0 +1,1 @@
+{"id":"B","name":"Rook","servePower":0.75,"serveControl":0.78,"forehandPower":0.65,"forehandControl":0.72,"backhandPower":0.8,"backhandControl":0.8,"maxSpeed":6.2,"acceleration":10,"reactionSeconds":0.20,"preparationSeconds":0.18,"stamina":0.8,"leftHanded":false}

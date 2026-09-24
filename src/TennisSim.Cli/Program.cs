@@ -19,11 +19,12 @@ internal static class Cli
                 "balance --count 2000 --seed 100 --out artifacts/balance.json\n" +
                 "coach --seed 42 --player-b defender --out artifacts/coached.json [--script commands.txt] [--opponent adaptive|fixed]\n" +
                 "coach-eval --sets 20 --seed 100 --out artifacts/coach-eval.json\n" +
-                "playtest --sets 40 --seed 100 --out artifacts/playtest.json [--player-a baseline --player-b strong-backhand]\n" +
+                "playtest --sets 40 --seed 100 --out artifacts/playtest.json [--player-a baseline --player-b backhander]\n" +
                 "bounce --input impact.json --surface-model impulse --profile profiles/pair.json --out artifacts/bounce.json\n" +
                 "diagnose --input artifacts/match.json --out artifacts/audit.json --source-id SOURCE\nscenarios --out artifacts/scenarios.json\n" +
                 "replay --input artifacts/match.json\nresimulate --input artifacts/match.json --out artifacts/resimulated.json\n" +
-                "Players: server|baseline|defender|JSON path; tactics: balanced|backhand|safe|aggressive|JSON path.\n" +
+                "Players: baseline|backhander|big-server|retriever|slugger|touch (archetypes, docs/PLAYER_TYPES.md), server|defender\n" +
+                "(legacy, out of the archetype strength band) or a JSON path; tactics: balanced|backhand|safe|aggressive|JSON path.\n" +
                 "Also: --config JSON --instructions JSON --chunk 120 --quiet. --surface-model legacy|impulse selects the bounce model;\n" +
                 "impulse additionally accepts --profile/--ball/--ball-condition JSON. Core outcomes are uncalibrated.");
             return 0;
@@ -107,8 +108,8 @@ internal static class Cli
                 (string, string)? matchup = null;
                 if (options.ContainsKey("player-a") || options.ContainsKey("player-b"))
                 {
-                    string a = Get("player-a", "baseline"), b = Get("player-b", "strong-backhand");
-                    if (!BalanceGrid.Presets.Contains(a) || !BalanceGrid.Opponents.Contains(b)) throw new ArgumentException("playtest players must be balance-grid presets: A " + string.Join("|", BalanceGrid.Presets) + ", B " + string.Join("|", BalanceGrid.Opponents));
+                    string a = Get("player-a", "baseline"), b = Get("player-b", "backhander");
+                    if (!BalanceGrid.Known(a) || !BalanceGrid.Known(b)) throw new ArgumentException("playtest players must be presets: " + string.Join("|", PlayerProfile.Archetypes.Concat(PlayerProfile.LegacyPresets)));
                     matchup = (a, b);
                 }
                 var result = Playtest.Run(sets, seed, matchup);

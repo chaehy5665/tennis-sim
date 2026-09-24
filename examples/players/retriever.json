@@ -1,0 +1,1 @@
+{"id":"B","name":"Moss","servePower":0.60,"serveControl":0.85,"forehandPower":0.45,"forehandControl":0.88,"backhandPower":0.45,"backhandControl":0.88,"maxSpeed":6.5,"acceleration":10.5,"reactionSeconds":0.17,"preparationSeconds":0.18,"stamina":0.95,"leftHanded":false}

@@ -27,6 +27,13 @@ namespace TennisSim.Core
                 if (!Vec3.Finite(v) || v < 0 || v > 1) throw new ArgumentException("Skills must be in [0,1]");
             if (!Vec3.Finite(MaxSpeed) || MaxSpeed <= 0 || MaxSpeed > 15 || !Vec3.Finite(Acceleration) || Acceleration <= 0 || Acceleration > 30 || !Vec3.Finite(ReactionSeconds) || ReactionSeconds < 0 || ReactionSeconds > 2 || !Vec3.Finite(PreparationSeconds) || PreparationSeconds < 0 || PreparationSeconds > 2) throw new ArgumentException("Invalid movement attributes");
         }
+        // The archetype roster (docs/PLAYER_TYPES.md): opponents of comparable overall strength whose weaknesses differ,
+        // so the best tactic depends on who is across the net. Balanced against balanced, any two stay within about
+        // 40-60% of points (engine tennissim-mvp-5).
+        public static readonly string[] Archetypes = { "baseline", "backhander", "big-server", "retriever", "slugger", "touch" };
+        // Presets outside the roster, kept byte-identical for existing replays, tests and docs: server is far weaker and
+        // defender far stronger than the roster.
+        public static readonly string[] LegacyPresets = { "server", "defender" };
         public static PlayerProfile Preset(string name, string id)
         {
             switch (name.ToLowerInvariant())
@@ -34,6 +41,16 @@ namespace TennisSim.Core
                 case "server": return new PlayerProfile { Id = id, Name = "Granite", ServePower = .96, ServeControl = .77, BackhandPower = .48, BackhandControl = .60, MaxSpeed = 5.3, Acceleration = 8, Stamina = .65 };
                 case "baseline": return new PlayerProfile { Id = id, Name = "Ember" };
                 case "defender": return new PlayerProfile { Id = id, Name = "Willow", ServePower = .60, ServeControl = .87, ForehandPower = .64, ForehandControl = .9, BackhandPower = .63, BackhandControl = .88, MaxSpeed = 7.1, Acceleration = 12, ReactionSeconds = .16, Stamina = .96 };
+                // Backhand-first all-rounder: Ember with forehand and backhand swapped, identical to the coach UI's Rook.
+                case "backhander": return new PlayerProfile { Id = id, Name = "Rook", ForehandPower = .65, ForehandControl = .72, BackhandPower = .8, BackhandControl = .8 };
+                // Serve and forehand first, slow feet and a weak backhand.
+                case "big-server": return new PlayerProfile { Id = id, Name = "Flint", ServePower = .97, ServeControl = .82, ForehandPower = .86, BackhandPower = .58, BackhandControl = .72, MaxSpeed = 6.0, Acceleration = 9, Stamina = .72 };
+                // Retriever without pace: quick, tireless and steady on both wings, but every ball comes back slow.
+                case "retriever": return new PlayerProfile { Id = id, Name = "Moss", ServePower = .6, ServeControl = .85, ForehandPower = .45, ForehandControl = .88, BackhandPower = .45, BackhandControl = .88, MaxSpeed = 6.5, Acceleration = 10.5, ReactionSeconds = .17, Stamina = .95 };
+                // Slugger: the heaviest ball on both wings and a big serve, the least control.
+                case "slugger": return new PlayerProfile { Id = id, Name = "Blaze", ServePower = .88, ServeControl = .74, ForehandPower = .97, ForehandControl = .67, BackhandPower = .9, BackhandControl = .63, MaxSpeed = 6.8, Acceleration = 11, ReactionSeconds = .18 };
+                // Left-handed touch player: the most control and little pace, slow around the court.
+                case "touch": return new PlayerProfile { Id = id, Name = "Wren", ServePower = .65, ServeControl = .88, ForehandPower = .58, ForehandControl = .92, BackhandPower = .6, BackhandControl = .92, MaxSpeed = 5.4, Acceleration = 8.5, ReactionSeconds = .18, LeftHanded = true };
                 default: throw new ArgumentException("Unknown player preset: " + name);
             }
         }

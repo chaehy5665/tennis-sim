@@ -1,0 +1,1 @@
+{"id":"B","name":"Wren","servePower":0.65,"serveControl":0.88,"forehandPower":0.58,"forehandControl":0.92,"backhandPower":0.60,"backhandControl":0.92,"maxSpeed":5.4,"acceleration":8.5,"reactionSeconds":0.18,"preparationSeconds":0.18,"stamina":0.8,"leftHanded":true}

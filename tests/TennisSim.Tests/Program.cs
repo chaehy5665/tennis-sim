@@ -569,6 +569,66 @@ Test("Diagnostic parser rejects missing velocity instead of observing zero", () 
     try { Diagnostics.Parse(node.ToJsonString()); } catch (ArgumentException) { rejected = true; }
     Check(rejected, "Missing outgoing velocity must not default to an observed zero");
 });
+Test("Legacy presets keep their exact values", () =>
+{
+    // Replays, the default CLI match (seed-42 hash in UNITY_VALIDATION.md) and the coach UI build on these numbers.
+    Check(ReplayJson.Serialize(PlayerProfile.Preset("baseline", "B")) == """{"id":"B","name":"Ember","servePower":0.75,"serveControl":0.78,"forehandPower":0.8,"forehandControl":0.8,"backhandPower":0.65,"backhandControl":0.72,"maxSpeed":6.2,"acceleration":10,"reactionSeconds":0.2,"preparationSeconds":0.18,"stamina":0.8,"leftHanded":false}""", "baseline");
+    Check(ReplayJson.Serialize(PlayerProfile.Preset("server", "B")) == """{"id":"B","name":"Granite","servePower":0.96,"serveControl":0.77,"forehandPower":0.8,"forehandControl":0.8,"backhandPower":0.48,"backhandControl":0.6,"maxSpeed":5.3,"acceleration":8,"reactionSeconds":0.2,"preparationSeconds":0.18,"stamina":0.65,"leftHanded":false}""", "server");
+    Check(ReplayJson.Serialize(PlayerProfile.Preset("defender", "B")) == """{"id":"B","name":"Willow","servePower":0.6,"serveControl":0.87,"forehandPower":0.64,"forehandControl":0.9,"backhandPower":0.63,"backhandControl":0.88,"maxSpeed":7.1,"acceleration":12,"reactionSeconds":0.16,"preparationSeconds":0.18,"stamina":0.96,"leftHanded":false}""", "defender");
+    Check(ReplayJson.Serialize(new MatchInput().Players) == ReplayJson.Serialize(new[] { PlayerProfile.Preset("baseline", "A"), PlayerProfile.Preset("defender", "B") }), "default match is still Ember vs Willow");
+});
+Test("Archetype presets validate, differ and keep the identities PLAYER_TYPES.md describes", () =>
+{
+    var all = PlayerProfile.Archetypes.Select(n => PlayerProfile.Preset(n, "B")).ToArray();
+    foreach (var p in all) p.Validate();
+    Check(PlayerProfile.Archetypes.Concat(PlayerProfile.LegacyPresets).Select(n => PlayerProfile.Preset(n, "B").Name).Distinct().Count() == PlayerProfile.Archetypes.Length + PlayerProfile.LegacyPresets.Length, "display names are unique");
+    string Stats(PlayerProfile p) { var c = p.Copy(); c.Name = ""; return ReplayJson.Serialize(c); }
+    Check(all.Select(Stats).Distinct().Count() == all.Length, "no two archetypes share their numbers");
+    Check(PlayerProfile.Preset("BIG-SERVER", "A").Id == "A", "preset names are case-insensitive");
+    bool unknown = false; try { PlayerProfile.Preset("strong-backhand", "A"); } catch (ArgumentException) { unknown = true; }
+    Check(unknown, "strong-backhand stays a balance-grid alias, not a Core preset");
+
+    var by = PlayerProfile.Archetypes.Zip(all).ToDictionary(x => x.First, x => x.Second);
+    double Power(PlayerProfile p) => (p.ForehandPower + p.BackhandPower) / 2;
+    double Control(PlayerProfile p) => (p.ForehandControl + p.BackhandControl) / 2;
+    double Gap(PlayerProfile p) => p.ForehandPower + p.ForehandControl - p.BackhandPower - p.BackhandControl;
+    // The scouting cues a coach reads: each archetype is the extreme of the attribute its counter depends on.
+    Check(Gap(by["baseline"]) > .1 && Gap(by["big-server"]) > .1 && Gap(by["backhander"]) < -.1, "backhand weakness shows in the forehand-backhand gap");
+    Check(all.All(p => p == by["big-server"] || p.ServePower < by["big-server"].ServePower), "big-server has the biggest serve");
+    Check(all.All(p => p == by["slugger"] || (Power(p) < Power(by["slugger"]) && Control(p) > Control(by["slugger"]))), "slugger: most power, least control");
+    Check(all.All(p => p == by["retriever"] || (Power(p) > Power(by["retriever"]) && p.Stamina < by["retriever"].Stamina)), "retriever: least power, most stamina");
+    Check(all.All(p => p == by["touch"] || (Control(p) < Control(by["touch"]) && p.MaxSpeed > by["touch"].MaxSpeed)), "touch: most control, slowest");
+    Check(by["touch"].LeftHanded && all.Count(p => p.LeftHanded) == 1, "touch is the only left-hander");
+
+    // The backhander is the coach UI's Rook: Ember with forehand and backhand swapped.
+    var rook = PlayerProfile.Preset("baseline", "B"); rook.Name = "Rook";
+    (rook.ForehandPower, rook.BackhandPower, rook.ForehandControl, rook.BackhandControl) = (rook.BackhandPower, rook.ForehandPower, rook.BackhandControl, rook.ForehandControl);
+    Check(ReplayJson.Serialize(by["backhander"]) == ReplayJson.Serialize(rook), "backhander equals Rook");
+    var grid = BalanceGrid.Player("strong-backhand", "B"); grid.Name = "Rook";
+    Check(ReplayJson.Serialize(grid) == ReplayJson.Serialize(rook), "strong-backhand alias has the backhander's numbers");
+
+    // examples/players holds the same numbers for JSON input.
+    var root = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (root != null && !File.Exists(Path.Combine(root.FullName, "TennisSim.sln"))) root = root.Parent;
+    foreach (var name in PlayerProfile.Archetypes.Concat(PlayerProfile.LegacyPresets))
+    {
+        var path = Path.Combine(root!.FullName, "examples", "players", name + ".json");
+        if (!File.Exists(path)) continue;
+        var file = ReplayJson.Deserialize<PlayerProfile>(File.ReadAllText(path)); file.Id = "B";
+        Check(ReplayJson.Serialize(file) == ReplayJson.Serialize(PlayerProfile.Preset(name, "B")), "example matches preset: " + name);
+    }
+    Check(PlayerProfile.Archetypes.All(n => File.Exists(Path.Combine(root!.FullName, "examples", "players", n + ".json"))), "every archetype has an example file");
+});
+Test("Every archetype pairing plays points deterministically", () =>
+{
+    foreach (var a in PlayerProfile.Archetypes) foreach (var b in PlayerProfile.Archetypes)
+    {
+        MatchRecord Play() => new MatchEngine(new MatchInput { Seed = 7, Players = new[] { PlayerProfile.Preset(a, "A"), PlayerProfile.Preset(b, "B") } }, 6).Run();
+        var r = Play();
+        Check(r.Status == "PointBatchComplete" && r.FinalScore.PointsPlayed == 6, $"{a} vs {b}: {r.Status} {r.Diagnostic}");
+        Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Play()), $"{a} vs {b} deterministic");
+    }
+});
 BounceTests.Run(Test);
 CalibrationTests.Run(Test);
 Console.WriteLine($"TEST_RESULT passed={passed} failed={failed}");

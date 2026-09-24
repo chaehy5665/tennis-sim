@@ -27,9 +27,9 @@
 
 | 요소 | 내용 | Core 지원 |
 |---|---|---|
-| 결정 시점 | 홀수 게임 뒤 코트 체인지 때 (실제 테니스 리듬과 일치, 결정 간격 약 2게임) | ◐ `TacticInstruction.RequestedTick`으로 임의 시점 지시 가능. 체인지오버 시점에 멈추는 기능은 없음 |
+| 결정 시점 | 홀수 게임 뒤 코트 체인지 때 (실제 테니스 리듬과 일치, 결정 간격 약 2게임) | ✅ `MatchEngine.AdvanceToChangeover()`가 엔드 교대 직후 멈춤. `QueueTactics`로 준 지시는 다음 포인트부터 적용되고 replay에 기록됨 |
 | 결정 내용 | 공격 대상(균형/백핸드 공략), 공격성(안전/균형/공격), 서브 방향(혼합/와이드/바디/T) | ✅ `Tactic` |
-| 결정 근거 | 직전 구간 통계: 첫 서브 성공률, 상대 백핸드 에러, 랠리 길이, 체력 | ◐ `PlayerStats`는 경기 전체 누적만 있음. 구간별 집계 없음 |
+| 결정 근거 | 직전 구간 통계: 첫 서브 성공률, 상대 백핸드 에러, 랠리 길이, 체력 | ✅ `SegmentStats.Compute(record, from, to)`: 득점, 서브 득점, 첫 서브, 더블 폴트, 위너, 포핸드/백핸드 에러와 타수, 평균 랠리. 체력은 아직 표시 안 함 |
 | 피드백 | 지시 후 몇 포인트 안에 선택 샷 분포와 결과가 달라지는 것이 보여야 함 | ◐ `Choices`, `CandidateRejections` 기록은 있음. 표시 UI 없음 |
 
 **위험 (측정됨)**: [BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md)에 따르면 현재 전술 공간은 "백핸드 공략 + Wide 서브,
@@ -89,11 +89,18 @@ D1 때문에 선수 여러 명 사이의 자원 배분이 없다. 따라서 매�
 
 필요한 작업:
 
-1. **Core**: 체인지오버 시점에서 경기를 멈추고 지시를 받는 진행 API. 현재 사전 입력 `Instructions`와 같은
-   기록으로 남겨 리플레이 재현성을 유지한다.
-2. **Core**: 구간별(마지막 N게임) 통계 집계.
-3. **밸런스**: 전술 × 선수 유형 매트릭스를 여러 seed로 돌려 지배 전술이 있는지 진단하고 조정한다.
+1. ✅ **Core**: 체인지오버 시점에서 경기를 멈추고 지시를 받는 진행 API (`AdvanceToChangeover`). 지시는 사전 입력
+   `Instructions`와 같은 기록으로 남아 리플레이가 정확히 재시뮬레이션된다.
+2. ✅ **Core**: 구간별 통계 집계 (`SegmentStats`).
+3. ✅ **밸런스**: 1차 진단과 engine v4 조정 완료 ([BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md)). 남은 문제는 그 문서의
+   "아직 풀리지 않은 것".
 4. **UI**: 경기 전 전술 화면, 체인지오버 지시 화면, 경기 후 리뷰 화면 (와이어프레임 → Unity UI Toolkit).
 5. **관전**: 기존 뷰어에 배속과 체인지오버 정지를 추가한다.
 
 슬라이스를 플레이해 보고 **체인지오버 결정이 재미있는지** 판단한 뒤에 매크로 루프와 3D 연출에 투자한다.
+
+UI 전에 판단할 수 있도록 텍스트 프로토타입이 있다. 상대(B)는 초기 전술을 유지한다.
+
+```bash
+dotnet run --project src/TennisSim.Cli --no-build -- coach --seed 42 --player-b defender --out artifacts/coached.json
+```

@@ -35,6 +35,10 @@ dotnet run --project src/TennisSim.Cli --no-build -- compare \
 dotnet run --project src/TennisSim.Cli --no-build -- points \
   --count 1000 --seed 100 --out artifacts/points-1000.json
 
+# 코칭 텍스트 프로토타입: 체인지오버마다 멈추고 구간 통계를 보여 준 뒤 A의 전술 변경을 받는다
+dotnet run --project src/TennisSim.Cli --no-build -- coach \
+  --seed 42 --player-b defender --out artifacts/coached.json
+
 # 전술 밸런스 격자: 선수 조합 × 전술별 독립 포인트 승률 (docs/BALANCE_DIAGNOSIS.md)
 dotnet run --project src/TennisSim.Cli --no-build -- balance \
   --count 2000 --seed 100 --out artifacts/balance/balance-2000.json

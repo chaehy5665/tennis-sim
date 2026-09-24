@@ -8,15 +8,16 @@ catch (Exception ex) when (ex is ArgumentException or IOException or System.Text
 
 internal static class Cli
 {
-    private static readonly HashSet<string> Known = new() { "seed", "player-a", "player-b", "tactics-a", "tactics-b", "instructions", "config", "out", "quiet", "chunk", "seeds", "count", "input", "source-id", "surface-model", "profile", "ball", "ball-condition" };
+    private static readonly HashSet<string> Known = new() { "seed", "player-a", "player-b", "tactics-a", "tactics-b", "instructions", "config", "out", "quiet", "chunk", "seeds", "count", "input", "source-id", "surface-model", "profile", "ball", "ball-condition", "script" };
     public static int Run(string[] args)
     {
         if (args.Length == 0 || args[0] is "help" or "--help")
         {
-            Console.WriteLine("TennisSim: match | compare | points | balance | bounce | replay | resimulate | diagnose | scenarios\n" +
+            Console.WriteLine("TennisSim: match | coach | compare | points | balance | bounce | replay | resimulate | diagnose | scenarios\n" +
                 "match --seed 42 --player-a baseline --player-b defender --tactics-a backhand --out artifacts/match.json\n" +
                 "compare --seeds 11,22,33,44,55 --out artifacts/comparison.json\npoints --count 1000 --seed 100 --out artifacts/points.json\n" +
                 "balance --count 2000 --seed 100 --out artifacts/balance.json\n" +
+                "coach --seed 42 --player-b defender --out artifacts/coached.json [--script commands.txt]\n" +
                 "bounce --input impact.json --surface-model impulse --profile profiles/pair.json --out artifacts/bounce.json\n" +
                 "diagnose --input artifacts/match.json --out artifacts/audit.json --source-id SOURCE\nscenarios --out artifacts/scenarios.json\n" +
                 "replay --input artifacts/match.json\nresimulate --input artifacts/match.json --out artifacts/resimulated.json\n" +
@@ -71,6 +72,15 @@ internal static class Cli
             {
                 var record = RunMatch(Input(options), chunk);
                 Print(record, !options.ContainsKey("quiet"));
+                if (options.TryGetValue("out", out var path)) { ReplayJson.Save(path, record); Console.WriteLine("REPLAY_FILE=" + Path.GetFullPath(path)); }
+                return record.Status == "Completed" ? 0 : 1;
+            }
+            case "coach":
+            {
+                // Interactive by default; --script replays one command line per changeover for tests and demos.
+                bool scripted = options.TryGetValue("script", out var script);
+                using var reader = scripted ? new StreamReader(script!) : null;
+                var record = Coach.Run(Input(options), reader ?? Console.In, Console.Out, scripted);
                 if (options.TryGetValue("out", out var path)) { ReplayJson.Save(path, record); Console.WriteLine("REPLAY_FILE=" + Path.GetFullPath(path)); }
                 return record.Status == "Completed" ? 0 : 1;
             }

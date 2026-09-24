@@ -320,6 +320,52 @@ Test("Live tactic request waits for point boundary and re-simulates from history
     var record = engine.Run(); var history = record.InstructionHistory.Single(); Check(history.RequestedTick == requested && history.AppliedPoint > point);
     var replay = Run(87, input: record.Input); Check(ReplayJson.Serialize(record) == ReplayJson.Serialize(replay));
 });
+Test("Changeover pause: stops after each end change, instructions apply next point and re-simulate", () =>
+{
+    var engine = new MatchEngine(new MatchInput { Seed = 42, Players = new[] { PlayerProfile.Preset("baseline", "A"), PlayerProfile.Preset("baseline", "B") } });
+    int pauses = 0; var tactics = new[] { new Tactic { Target = TargetStyle.TargetBackhand }, new Tactic { Aggression = Aggression.Aggressive }, new Tactic { Serve = ServeDirection.Wide } };
+    while (engine.AdvanceToChangeover())
+    {
+        var state = engine.State;
+        Check(engine.Record.Events[^1].Kind == "EndsChanged", "paused right after the end change");
+        int games = state.Score.Games[0] + state.Score.Games[1];
+        Check(state.Score.TieBreak || games % 2 == 1, "end changes only after odd games outside a tiebreak: " + games);
+        var tactic = tactics[pauses % tactics.Length]; engine.QueueTactics(0, tactic); pauses++;
+        int nextPoint = state.Score.PointsPlayed + 1;
+        engine.AdvanceTicks(1);
+        Check(engine.Finished || (engine.State.Point == nextPoint && engine.State.Tactics[0].Aggression == tactic.Aggression && engine.State.Tactics[0].Target == tactic.Target), "applied from the next point");
+    }
+    var record = engine.Record; Check(record.Status == "Completed" && pauses > 0);
+    Check(record.InstructionHistory.Count == pauses && record.InstructionHistory.All(i => i.AppliedPoint > 0));
+    Check(pauses == record.Events.Count(e => e.Kind == "EndsChanged") - (record.Events.Last(e => e.Kind == "EndsChanged").Point == record.FinalScore.PointsPlayed ? 1 : 0));
+    Check(ReplayJson.Serialize(record) == ReplayJson.Serialize(Run(42, 137, record.Input)), "coached replay re-simulates exactly");
+});
+Test("Segment stats over the whole match agree with match stats", () =>
+{
+    foreach (uint seed in new uint[] { 3, 42 })
+    {
+        var r = Run(seed); var s = SegmentStats.Compute(r, 1, r.FinalScore.PointsPlayed);
+        Check(s.Points == r.FinalScore.PointsPlayed);
+        for (int i = 0; i < 2; i++)
+        {
+            Check(s.Players[i].PointsWon == r.Stats.Players[i].PointsWon, "points won");
+            Check(s.Players[i].DoubleFaults == r.Stats.Players[i].DoubleFaults, "double faults");
+            Check(s.Players[i].Forehands == r.Stats.Players[i].Forehands && s.Players[i].Backhands == r.Stats.Players[i].Backhands, "strokes");
+        }
+        Check(s.Players.Sum(p => p.ServePoints) == s.Points && s.Players[0].ServePointsWon + s.Players[1].ServePoints - s.Players[1].ServePointsWon == s.Players[0].PointsWon);
+        Check(Math.Abs(s.MeanRallyLength - r.Stats.RallyLengths.Average()) < 1e-12, "rally length matches MatchStats");
+        int ended = s.Players.Sum(p => p.Winners + p.ForehandErrors + p.BackhandErrors + p.DoubleFaults);
+        Check(ended == s.Points, $"every point has one cause: {ended} vs {s.Points}");
+        var half = SegmentStats.Compute(r, 1, 10); var rest = SegmentStats.Compute(r, 11, r.FinalScore.PointsPlayed);
+        Check(half.Points + rest.Points == s.Points && half.Players[1].Winners + rest.Players[1].Winners == s.Players[1].Winners);
+    }
+});
+Test("Coaching commands parse settings and reject unknown ones", () =>
+{
+    Check(Coach.TryParse("t=backhand a=safe s=t", new Tactic(), out var t, out _) && t.Target == TargetStyle.TargetBackhand && t.Aggression == Aggression.Safe && t.Serve == ServeDirection.T);
+    Check(Coach.TryParse("a=aggressive", t, out var u, out _) && u.Target == TargetStyle.TargetBackhand && u.Aggression == Aggression.Aggressive && t.Aggression == Aggression.Safe);
+    Check(!Coach.TryParse("a=reckless", t, out _, out _) && !Coach.TryParse("a=7", t, out _, out _) && !Coach.TryParse("aggressive", t, out _, out _) && !Coach.TryParse("x=1", t, out _, out _));
+});
 Test("Limits terminate diagnostically and never award a fabricated point", () =>
 {
     var r = Run(1, input: new MatchInput { Config = new SimConfig { MaxPointTicks = 1 } });

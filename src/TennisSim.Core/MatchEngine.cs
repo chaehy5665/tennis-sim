@@ -86,6 +86,21 @@ namespace TennisSim.Core
             }
         }
         public MatchRecord Run() { while (!Finished) AdvanceTicks(1024); return Record; }
+        // Advances until the players change ends (after odd games, every six tiebreak points) and returns true, paused
+        // before the next point starts; tactics queued now apply from that point. Returns false when the match ends,
+        // including an end change on the final point.
+        public bool AdvanceToChangeover()
+        {
+            int seen = Record.Events.Count;
+            while (!Finished)
+            {
+                AdvanceTicks(1);
+                for (int i = seen; i < Record.Events.Count; i++)
+                    if (Record.Events[i].Kind == "EndsChanged" && !score.Complete) return true;
+                seen = Record.Events.Count;
+            }
+            return false;
+        }
         private void Step()
         {
             double time = tick * config.TickSeconds;

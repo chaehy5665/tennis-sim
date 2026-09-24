@@ -5,6 +5,9 @@
 아래 "v4 결과" 절에 있다.
 파라미터는 바꾸지 않았다. `REALISM_CALIBRATED=false`.
 
+선수 유형 도입 뒤로 `balance` 격자의 선수는 유형 6개다([PLAYER_TYPES.md](PLAYER_TYPES.md)). 아래 v3~v5 결과는 당시의
+baseline·server·defender(·strong-backhand) 격자이므로, 같은 명령으로 다시 돌리면 셀 구성이 다르다.
+
 ## 재현
 
 ```bash

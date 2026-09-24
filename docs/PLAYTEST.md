@@ -17,13 +17,13 @@ push, Unity 빌드, 손 플레이, 보고까지 수십 분이 걸리고 원격 �
 ```bash
 dotnet build src/TennisSim.Cli -c Release
 
-# 전체: A 프리셋 3 × B 상대 4 = 12 매치업 × 정책 12 × 40세트
+# 전체: 선수 유형 6 × 6 = 36 매치업 × 정책 12 × 40세트 (v5 기준값 아래 절은 옛 12 매치업)
 DOTNET_gcServer=1 dotnet run --project src/TennisSim.Cli -c Release --no-build -- playtest --sets 40 --seed 100 \
   --out artifacts/playtest.json
 
 # 코치 UI와 같은 매치업만 (Ember 대 Rook). 20세트 약 5초
 DOTNET_gcServer=1 dotnet run --project src/TennisSim.Cli -c Release --no-build -- playtest --sets 20 \
-  --player-a baseline --player-b strong-backhand
+  --player-a baseline --player-b backhander
 ```
 
 Release 빌드는 Debug의 약 절반 시간이고(단일 매치업 20세트 9.4초 → 4.7초), 결과 파일은 바이트까지 같았다.

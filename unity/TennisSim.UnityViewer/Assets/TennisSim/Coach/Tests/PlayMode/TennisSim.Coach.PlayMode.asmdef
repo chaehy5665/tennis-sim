@@ -4,6 +4,10 @@
     "TennisSim.Coach",
     "TennisSim.Coach.App"
   ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "TennisSim.Core.dll"
+  ],
   "optionalUnityReferences": [
     "TestAssemblies"
   ]

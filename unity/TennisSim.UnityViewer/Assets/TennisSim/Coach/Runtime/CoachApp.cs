@@ -131,28 +131,37 @@ namespace TennisSim.Coach
         // Token values from TennisSimCoach.uss for the few styles set in code.
         static Color Hex(string html) { ColorUtility.TryParseHtmlString(html, out var c); return c; }
         // Buttons wrap onto further lines, right aligned with space-2 between them, and never leave their container.
-        // When the buttons wrap, the row switches to a stacked column where every button takes the row's full width.
-        // USS cannot see wrapping, so it is detected from layout. Stacking is decided only while unstacked (by the
-        // buttons' y); unstacking only while stacked, by width alone: the row must fit the buttons' natural widths plus
-        // their 8px gaps AND be 16px wider than where it wrapped. The second bound stops a stack/unstack loop at one
-        // width when a shrunk button made the recorded natural width too small; stacked mode also drops the row's -8px
-        // margin, which adds 8px of hysteresis.
-        static VisualElement ButtonRow(params Button[] buttons)
+        // Button row without layout state. Each button's natural width (text + padding + border) is measured once; the
+        // row's width comes from its parent (stretched in a column, flex-grow with basis 0 in a row), never from its own
+        // content, so the decision cannot feed back into itself: stacked = row width < natural widths + 8px gaps.
+        // Row: right aligned, 8px between buttons. Stacked: one column, every button the row's full width, 8px apart.
+        static VisualElement ButtonRow(params Button[] buttons) => ButtonRow(false, buttons);
+        static VisualElement ButtonRow(bool fillParentRow, params Button[] buttons)
         {
             var r = Box("tsc-button-row");
+            if (fillParentRow) { r.style.flexGrow = 1; r.style.flexBasis = 0; }
             foreach (var b in buttons) r.Add(b);
-            float natural = 0, wrappedAt = 0;
+            var natural = new float[buttons.Length];
+            bool? stacked = null;
             r.RegisterCallback<GeometryChangedEvent>(_ =>
             {
-                if (!r.ClassListContains("tsc-button-row--stacked"))
+                for (int i = 0; i < buttons.Length; i++)
+                    if (natural[i] <= 0)
+                    {
+                        var st = buttons[i].resolvedStyle;
+                        float text = buttons[i].MeasureTextSize(buttons[i].text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined).x;
+                        if (text > 0) natural[i] = Mathf.Ceil(text + st.paddingLeft + st.paddingRight + st.borderLeftWidth + st.borderRightWidth);
+                    }
+                if (natural.Any(w => w <= 0)) return;
+                bool stack = r.contentRect.width < natural.Sum() + 8 * (buttons.Length - 1);
+                if (stacked == stack) return;
+                stacked = stack;
+                r.EnableInClassList("tsc-button-row--stacked", stack);
+                for (int i = 0; i < buttons.Length; i++)
                 {
-                    bool wrapped = buttons.Length > 1 && buttons.Any(b => Mathf.Abs(b.layout.y - buttons[0].layout.y) > 1);
-                    if (!wrapped) return;
-                    natural = Mathf.Max(natural, buttons.Sum(b => b.layout.width + 8));
-                    wrappedAt = r.layout.width;
-                    r.AddToClassList("tsc-button-row--stacked");
+                    buttons[i].style.marginLeft = !stack && i > 0 ? 8 : 0;
+                    buttons[i].style.marginTop = stack && i > 0 ? 8 : 0;
                 }
-                else if (r.layout.width >= Mathf.Max(natural, wrappedAt + 16)) r.RemoveFromClassList("tsc-button-row--stacked");
             });
             return r;
         }
@@ -439,28 +448,27 @@ namespace TennisSim.Coach
             court = null;
             var page = Page(3);
             var v = CoachViews.Review(Session);
-            var top = Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true), Box("tsc-grow"),
-                ButtonRow(MakeButton("같은 Seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true)));
+            var top = Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true),
+                ButtonRow(true, MakeButton("같은 Seed로 다시", () => NewSession(Seed), false), MakeButton("다음 경기 준비", () => NewSession(Seed + 1), true)));
             page.Add(Text("경기 리뷰 · " + v.Points + "포인트 · " + (v.Winner == 0 ? "승리" : "패배"), "tsc-label", "tsc-on-ground-muted"));
             page.Add(top);
 
             var timeline = Box("tsc-panel"); timeline.style.marginTop = 16; timeline.style.marginBottom = 16;
             timeline.Add(Text("전술 구간별 흐름 · 카드 아래는 게임별 승자", "tsc-label", "tsc-gap-bottom"));
-            // Segment cards share one minimum width and one height; longer segments grow wider, and cards that do not
-            // fit wrap to the next line instead of shrinking.
-            // align-content flex-start: wrapped lines keep their content height instead of stretching to the parent.
-            var segRow = Box("tsc-row"); segRow.style.flexWrap = Wrap.Wrap; segRow.style.alignContent = Align.FlexStart; segRow.style.marginLeft = segRow.style.marginRight = -4;
+            // Segment cards in rows built here, not flex-wrap (Yoga does not grow the parent for wrapped lines): n cards
+            // per row from the width, all the same width, each row as tall as its tallest card. Empty slots in the last
+            // row are invisible fillers. Rows are rebuilt only when n changes.
+            var cards = new List<VisualElement>();
             foreach (var s in v.Segments)
             {
-                int span = Math.Max(1, s.LastGame - s.FirstGame + 1);
-                var cell = Box("tsc-card"); cell.style.flexGrow = span; cell.style.flexBasis = 0; cell.style.minWidth = 180; cell.style.paddingLeft = cell.style.paddingRight = 4; cell.style.marginBottom = 8;
+                var cell = Box("tsc-card"); cell.style.flexGrow = 1; cell.style.flexBasis = 0; cell.style.paddingLeft = cell.style.paddingRight = 4;
                 var inner = Box("tsc-inset", "tsc-inset--compact"); inner.style.flexGrow = 1;
                 inner.Add(Text(s.Games, "tsc-label"));
                 inner.Add(Text("A " + s.TacticA, "tsc-body"));
                 inner.Add(Text("B " + s.TacticB, "tsc-body", "tsc-muted"));
                 inner.Add(Number("A " + s.Won + "/" + s.Points, "tsc-stat"));
-                // Game winners live inside their segment card, so they stay aligned when cards wrap.
-                var winners = Box("tsc-row"); winners.style.flexWrap = Wrap.Wrap; winners.style.marginTop = 8;
+                // Game winners live inside their segment card, one per line (no flex-wrap), so they move with the card.
+                var winners = Box(); winners.style.marginTop = 8; winners.style.alignItems = Align.FlexStart;
                 for (int g = s.FirstGame; g <= s.LastGame && g <= v.GameWinners.Count; g++)
                 {
                     int w = v.GameWinners[g - 1];
@@ -470,9 +478,31 @@ namespace TennisSim.Coach
                     winners.Add(chip);
                 }
                 inner.Add(winners);
-                cell.Add(inner); segRow.Add(cell);
+                cell.Add(inner); cards.Add(cell);
             }
-            timeline.Add(segRow);
+            var grid = Box(); grid.style.marginLeft = grid.style.marginRight = -4;
+            int perRow = 0;
+            grid.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                // n = floor((W + 8) / (180 + 8)) for panel content width W: the grid is pulled out 4px each side, so its
+                // own width is already W + 8, and each 180px card carries 4px padding on both sides.
+                int n = Math.Max(1, Mathf.FloorToInt(grid.contentRect.width / (180 + 8)));
+                n = Math.Min(n, Math.Max(1, cards.Count));
+                if (n == perRow) return;
+                perRow = n;
+                grid.Clear();
+                for (int i = 0; i < cards.Count; i += n)
+                {
+                    var line = Box("tsc-row"); line.style.alignItems = Align.Stretch; line.style.marginBottom = 8;
+                    for (int j = 0; j < n; j++)
+                    {
+                        if (i + j < cards.Count) line.Add(cards[i + j]);
+                        else { var filler = Box("tsc-card"); filler.style.flexGrow = 1; filler.style.flexBasis = 0; filler.style.visibility = Visibility.Hidden; line.Add(filler); }
+                    }
+                    grid.Add(line);
+                }
+            });
+            timeline.Add(grid);
             page.Add(timeline);
 
             var columns = Box("tsc-row", "tsc-grow"); columns.style.alignItems = Align.Stretch;

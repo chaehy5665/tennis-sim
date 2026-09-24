@@ -68,14 +68,14 @@
 .tsc-root .tsc-button--primary { background-color: var(--selected); color: var(--on-selected); border-width: 0; }
 .tsc-root .tsc-button--secondary { background-color: var(--ground); color: var(--line); border-width: 1px; border-color: var(--line); }
 
-/* Button row: wraps, right aligned, space-2 between buttons in both directions, never wider than its parent.
-   The row is pulled out by the button margins so its buttons line up with the parent's padding. */
-.tsc-button-row { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; margin-left: -8px; margin-top: 8px; }
-.tsc-root .tsc-button-row .tsc-button { margin: 8px 0 0 8px; flex-shrink: 1; max-width: 100%; }
+/* Button row: right aligned, space-2 between buttons (margins set from C#), never wider than its parent. C# stacks
+   it when the parent width is below the buttons' natural widths plus gaps; it has no negative margins, so its width
+   never depends on its own state. */
+.tsc-button-row { flex-direction: row; flex-wrap: nowrap; justify-content: flex-end; flex-shrink: 0; }
+.tsc-root .tsc-button-row .tsc-button { margin: 0; flex-shrink: 0; }
 
-/* Stacked button row (set from C# when the buttons wrap): one column, every button the row's full width. */
-.tsc-button-row--stacked { flex-direction: column; align-items: stretch; margin-left: 0; }
-.tsc-root .tsc-button-row--stacked .tsc-button { margin: 8px 0 0 0; max-width: none; }
+/* Stacked button row: one column, every button the row's full width. */
+.tsc-button-row--stacked { flex-direction: column; align-items: stretch; }
 
 /* Content never shrinks when the screen overflows; the body scrolls instead (UI Toolkit defaults flex-shrink to 1). */
 .tsc-card { flex-shrink: 0; }
@@ -96,6 +96,15 @@
 .tsc-inset { flex-shrink: 0; background-color: var(--ground); border-radius: 0; padding: 16px; }
 .tsc-inset--compact { padding: 8px; }
 .tsc-root .tsc-inset__kicker { margin-bottom: 4px; }
+
+/* Scrollbar (vertical only): 8px, no arrow buttons, ground track, control-border thumb (line-muted on hover). */
+.tsc-root .unity-scroller--horizontal { display: none; }
+.tsc-root .unity-scroller--vertical { width: 8px; min-width: 8px; border-width: 0; background-color: var(--ground); }
+.tsc-root .unity-scroller--vertical .unity-scroller__low-button, .tsc-root .unity-scroller--vertical .unity-scroller__high-button { display: none; }
+.tsc-root .unity-scroller--vertical .unity-scroller__slider { width: 8px; margin: 0; }
+.tsc-root .unity-scroller--vertical .unity-base-slider__tracker { background-color: var(--ground); border-width: 0; }
+.tsc-root .unity-scroller--vertical .unity-base-slider__dragger { background-color: var(--control-border); border-width: 0; border-radius: 4px; left: 0; right: 0; width: 8px; margin: 0; }
+.tsc-root .unity-scroller--vertical .unity-base-slider__dragger:hover { background-color: var(--line-muted); }
 
 /* Tables */
 .tsc-table-row { flex-shrink: 0; min-height: 32px; align-items: center; flex-direction: row; border-top-width: 1px; border-color: var(--net); padding-top: 6px; padding-bottom: 6px; }

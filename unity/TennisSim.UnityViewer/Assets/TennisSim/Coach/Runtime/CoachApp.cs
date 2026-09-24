@@ -178,13 +178,14 @@ namespace TennisSim.Coach
             header.Add(steps);
             var info = Text("Seed " + Seed + " · 1세트 · 하드코트", "tsc-label", "tsc-on-ground-muted", "tsc-header__info");
             header.Add(info);
-            // Title and steps never shrink; the match info shrinks first (ellipsis in USS) and is hidden when even the
-            // title and steps do not fit. Hiding it does not change their widths, so the check cannot feed back.
+            // Title and steps never shrink; the match info shrinks first (ellipsis in USS) and is hidden when fewer than
+            // 96px would be left for it, so it never shows a meaningless fragment like "Se…". Hiding it does not change
+            // the title or step widths, so the check cannot feed back.
             header.RegisterCallback<GeometryChangedEvent>(_ =>
             {
                 float stepsWidth = 0;
                 foreach (var s in steps.Children()) stepsWidth += s.layout.width + s.resolvedStyle.marginLeft + s.resolvedStyle.marginRight;
-                bool fits = header.contentRect.width >= title.layout.width + stepsWidth + 32;
+                bool fits = header.contentRect.width >= title.layout.width + stepsWidth + 32 + 96;
                 info.style.display = fits ? DisplayStyle.Flex : DisplayStyle.None;
             });
             Root.Add(header);

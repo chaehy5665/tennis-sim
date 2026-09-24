@@ -178,15 +178,22 @@ namespace TennisSim.Coach
             header.Add(steps);
             var info = Text("Seed " + Seed + " · 1세트 · 하드코트", "tsc-label", "tsc-on-ground-muted", "tsc-header__info");
             header.Add(info);
-            // Title and steps never shrink; the match info shrinks first (ellipsis in USS) and is hidden when fewer than
-            // 96px would be left for it, so it never shows a meaningless fragment like "Se…". Hiding it does not change
-            // the title or step widths, so the check cannot feed back.
+            // Nothing in the header shrinks. The match info is either whole or hidden: it shows only when the header
+            // fits the title, the step items, 32px and the info's natural width. That width is the larger of its
+            // rendered width (while shown) and MeasureTextSize plus letter spacing (0.72px per character, in case the
+            // measure leaves it out), measured after ApplyFont set the font. Hiding it never changes the title or step
+            // widths, so the check cannot feed back.
+            float infoWidth = 0;
             header.RegisterCallback<GeometryChangedEvent>(_ =>
             {
+                float measured = info.MeasureTextSize(info.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined).x + .72f * info.text.Length;
+                infoWidth = Mathf.Max(infoWidth, Mathf.Ceil(measured));
+                if (info.resolvedStyle.display == DisplayStyle.Flex) infoWidth = Mathf.Max(infoWidth, Mathf.Ceil(info.layout.width));
                 float stepsWidth = 0;
                 foreach (var s in steps.Children()) stepsWidth += s.layout.width + s.resolvedStyle.marginLeft + s.resolvedStyle.marginRight;
-                bool fits = header.contentRect.width >= title.layout.width + stepsWidth + 32 + 96;
-                info.style.display = fits ? DisplayStyle.Flex : DisplayStyle.None;
+                bool fits = header.contentRect.width >= title.layout.width + stepsWidth + 32 + infoWidth;
+                var display = fits ? DisplayStyle.Flex : DisplayStyle.None;
+                if (info.resolvedStyle.display != display) info.style.display = display;
             });
             Root.Add(header);
             // The body scrolls vertically; the header stays. The body is at least one viewport tall so flex-grow

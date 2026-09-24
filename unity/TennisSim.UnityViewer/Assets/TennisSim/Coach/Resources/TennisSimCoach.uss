@@ -41,8 +41,8 @@
 .tsc-header { flex-direction: row; align-items: center; height: 56px; padding-left: 32px; padding-right: 32px; border-bottom-width: 1px; border-color: var(--net); }
 .tsc-steps { flex-direction: row; flex-grow: 1; flex-shrink: 0; justify-content: center; }
 .tsc-root .tsc-header__title { flex-shrink: 0; }
-/* Match info gives way first: shrinks with an ellipsis, then C# hides it when title and steps alone do not fit. */
-.tsc-root .tsc-header__info { flex-shrink: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Match info is whole or hidden (C# hides it when it would not fit whole); it never shrinks or ellipsizes. */
+.tsc-root .tsc-header__info { flex-shrink: 0; white-space: nowrap; }
 .tsc-root .tsc-step { padding: 8px 16px; margin-left: 8px; border-radius: 4px; color: var(--net); }
 .tsc-root .tsc-step--current { background-color: var(--selected); color: var(--on-selected); }
 .tsc-panel { flex-shrink: 0; background-color: var(--court); border-width: 1px; border-color: var(--control-border); border-radius: 0; padding: 16px; }

@@ -494,6 +494,7 @@ namespace TennisSim.Coach
                 }
                 panel.Add(row);
             }
+            if (p.Note != null) { var note = Text(p.Note, "tsc-body", "tsc-muted"); note.style.marginTop = 8; panel.Add(note); }
             return panel;
         }
 

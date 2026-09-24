@@ -21,6 +21,8 @@ namespace TennisSim.Coach
     public sealed class EvidencePanel
     {
         public string Title; public string Sample; public bool SampleTag;
+        // A body line under the table for a value that is not per player (average rally), or null.
+        public string Note;
         public string[] Columns = new string[0];
         public List<SplitRow> Split = new List<SplitRow>();
         public List<EvidenceRow> Rows = new List<EvidenceRow>();
@@ -313,8 +315,10 @@ namespace TennisSim.Coach
             panel.Rows.Add(R("첫 서브 성공", (x, p) => Count(p.FirstServesIn, p.ServePoints)));
             panel.Rows.Add(R("위너", (x, p) => p.Winners.ToString()));
             panel.Rows.Add(R("에러 포핸드/백핸드", (x, p) => p.ForehandErrors + "/" + p.BackhandErrors));
-            panel.Rows.Add(R("평균 랠리", (x, p) => CoachText.Fixed(x.MeanRallyLength, 1)));
             panel.Rows.Add(R("체력", (x, p) => Energy(p)));
+            // Average rally belongs to the segment, not to a player: one line under the table, not two equal cells.
+            string Rally(SegmentStats x) => CoachText.Fixed(x.MeanRallyLength, 1) + "구";
+            panel.Note = prev != null ? "평균 랠리 · 직전 " + Rally(prev) + " → 이번 " + Rally(now) : "평균 랠리 · 이번 " + Rally(now);
             return panel;
         }
 

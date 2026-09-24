@@ -190,7 +190,9 @@ Test("Changeover evidence: panels follow the segment stats, previous columns app
         Check(v.Serve.Rows.Select(r => r.Label).SequenceEqual(new[] { "와이드", "바디", "T" }) && v.Serve.Sample == "내 서브 " + me.ServePoints + "포인트");
         Check(v.Serve.Rows[0].Values[2] == (me.WideServe.Points == 0 ? "—" : me.WideServe.Won + "/" + me.WideServe.Points), "serve ratios as k/n");
         Check(v.Serve.Rows.All(r => !r.Values.Any(x => x.Contains("%"))), "no percent in serve course");
-        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Count == 7);
+        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Count == 6 && v.Compare.Rows.All(r => r.Label != "평균 랠리"));
+        string rally = CoachText.Fixed(now.MeanRallyLength, 1) + "구";
+        Check(i == 0 ? v.Compare.Note == "평균 랠리 · 이번 " + rally : v.Compare.Note.StartsWith("평균 랠리 · 직전 ") && v.Compare.Note.EndsWith(" → 이번 " + rally), v.Compare.Note);
     }
 });
 Test("Change summary names only the changed axes, or what is kept", () =>

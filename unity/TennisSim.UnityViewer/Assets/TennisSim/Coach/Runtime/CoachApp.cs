@@ -171,11 +171,22 @@ namespace TennisSim.Coach
         {
             Root.Clear();
             var header = Box("tsc-header");
-            header.Add(Text("TennisSim 코치", "tsc-title"));
+            var title = Text("TennisSim 코치", "tsc-title", "tsc-header__title");
+            header.Add(title);
             var steps = Box("tsc-steps");
             for (int i = 0; i < Steps.Length; i++) steps.Add(Text((i + 1) + " " + Steps[i], "tsc-label", "tsc-step", i == step ? "tsc-step--current" : "tsc-step-other"));
             header.Add(steps);
-            header.Add(Text("Seed " + Seed + " · 1세트 · 하드코트", "tsc-label", "tsc-on-ground-muted"));
+            var info = Text("Seed " + Seed + " · 1세트 · 하드코트", "tsc-label", "tsc-on-ground-muted", "tsc-header__info");
+            header.Add(info);
+            // Title and steps never shrink; the match info shrinks first (ellipsis in USS) and is hidden when even the
+            // title and steps do not fit. Hiding it does not change their widths, so the check cannot feed back.
+            header.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                float stepsWidth = 0;
+                foreach (var s in steps.Children()) stepsWidth += s.layout.width + s.resolvedStyle.marginLeft + s.resolvedStyle.marginRight;
+                bool fits = header.contentRect.width >= title.layout.width + stepsWidth + 32;
+                info.style.display = fits ? DisplayStyle.Flex : DisplayStyle.None;
+            });
             Root.Add(header);
             // The body scrolls vertically; the header stays. The body is at least one viewport tall so flex-grow
             // children (the match court, the review columns) still fill the screen when the content is shorter.
@@ -499,7 +510,8 @@ namespace TennisSim.Coach
                     for (int j = 0; j < n; j++)
                     {
                         if (i + j < cards.Count) line.Add(cards[i + j]);
-                        else { var filler = Box("tsc-card"); filler.style.flexGrow = 1; filler.style.flexBasis = 0; filler.style.visibility = Visibility.Hidden; line.Add(filler); }
+                        // Same padding, grow and basis as a real card, so every row splits its width identically.
+                        else { var filler = Box("tsc-card"); filler.style.flexGrow = 1; filler.style.flexBasis = 0; filler.style.paddingLeft = filler.style.paddingRight = 4; filler.style.visibility = Visibility.Hidden; line.Add(filler); }
                     }
                     grid.Add(line);
                 }

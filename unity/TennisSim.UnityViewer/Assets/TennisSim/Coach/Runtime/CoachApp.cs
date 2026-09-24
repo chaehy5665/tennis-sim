@@ -132,20 +132,27 @@ namespace TennisSim.Coach
         static Color Hex(string html) { ColorUtility.TryParseHtmlString(html, out var c); return c; }
         // Buttons wrap onto further lines, right aligned with space-2 between them, and never leave their container.
         // When the buttons wrap, the row switches to a stacked column where every button takes the row's full width.
-        // USS cannot see wrapping, so it is detected from layout; the natural width decides when to unstack again.
+        // USS cannot see wrapping, so it is detected from layout. Stacking is decided only while unstacked (by the
+        // buttons' y); unstacking only while stacked, by width alone: the row must fit the buttons' natural widths plus
+        // their 8px gaps AND be 16px wider than where it wrapped. The second bound stops a stack/unstack loop at one
+        // width when a shrunk button made the recorded natural width too small; stacked mode also drops the row's -8px
+        // margin, which adds 8px of hysteresis.
         static VisualElement ButtonRow(params Button[] buttons)
         {
             var r = Box("tsc-button-row");
             foreach (var b in buttons) r.Add(b);
-            float natural = 0;
+            float natural = 0, wrappedAt = 0;
             r.RegisterCallback<GeometryChangedEvent>(_ =>
             {
                 if (!r.ClassListContains("tsc-button-row--stacked"))
                 {
                     bool wrapped = buttons.Length > 1 && buttons.Any(b => Mathf.Abs(b.layout.y - buttons[0].layout.y) > 1);
-                    if (wrapped) { natural = buttons.Sum(b => b.layout.width + 8); r.AddToClassList("tsc-button-row--stacked"); }
+                    if (!wrapped) return;
+                    natural = Mathf.Max(natural, buttons.Sum(b => b.layout.width + 8));
+                    wrappedAt = r.layout.width;
+                    r.AddToClassList("tsc-button-row--stacked");
                 }
-                else if (natural > 0 && r.layout.width >= natural) r.RemoveFromClassList("tsc-button-row--stacked");
+                else if (r.layout.width >= Mathf.Max(natural, wrappedAt + 16)) r.RemoveFromClassList("tsc-button-row--stacked");
             });
             return r;
         }

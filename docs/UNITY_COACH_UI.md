@@ -45,10 +45,21 @@ Core만 결정하고, UI는 기록을 읽어 그린다.
 selected·on-selected), InfoBanner(info-surface·info-border), 히트맵(친 선수 색 채움 = 백핸드 공략, line-muted 빈 원 =
 그 외, line 빈 원 = 아웃, 범례 글자 포함)을 따른다. USS에 outline이 없어서 포커스 링은 ball 색 2px 테두리로 대신한다.
 
-한글: 디자인 시스템은 시스템 산세리프만 지정한다. Unity 기본 런타임 폰트에는 한글이 없으므로
-`Font.CreateDynamicFontFromOSFont`로 OS 폰트를 쓴다(macOS Apple SD Gothic Neo, Windows Malgun Gothic 순).
-숫자는 SF Mono, Menlo 순이다. **이 경로는 검증되지 않았다.** 글자가 네모로 나오면 한글 폰트 에셋을 프로젝트에 넣는
-결정이 필요하다(OFL 폰트 추가).
+서체(디자인 시스템 v8 `type.fonts`): `Coach/Resources/Fonts/`에 원본 그대로 넣었다(서브셋이나 수정 없음, OFL 예약 이름
+조항). sha256은 디자인 시스템 목록과 jsdelivr 원본 둘 다와 일치한다.
+
+| 파일 | 용도 | sha256 |
+|---|---|---|
+| Pretendard-Regular.otf | sans 400 (body) | 3ffbacde…1c93 |
+| Pretendard-Bold.otf | sans 600/700 (headline, title, label, 버튼) | 2e91915f…1cc7 |
+| JetBrainsMono-Medium.ttf | mono 500 (stat) | 31c92d01…4d3d |
+| JetBrainsMono-Bold.ttf | mono 700 (score) | 5590990c…6dcb |
+| Pretendard-LICENSE.txt, JetBrainsMono-OFL.txt | SIL OFL 1.1 | |
+
+`CoachApp.ApplyFont`가 글자 단계로 파일을 고른다. 굵기는 파일이 정하므로 USS의 `-unity-font-style`은 normal이다
+(Bold 파일을 다시 굵게 만들지 않기 위해서). score와 stat은 JetBrains Mono로 그리되, 한글이 섞인 문자열은 Pretendard로
+그린다. 레거시 Font 에셋의 기본 가져오기 설정(Character: Dynamic)을 쓰므로, 한글 전체를 굽지 않고 그린 글자만 동적
+아틀라스에 올린다. OS 폰트를 런타임에 불러오던 코드는 없앴다. 서브 표시는 글리프(●) 대신 공 색 점으로 그린다.
 
 ## Mac에서 할 일
 
@@ -69,6 +80,7 @@ Editor에서 처음 열면 새 파일들의 `.meta`가 생성된다. 그 `.meta`
 2. 경기: 점수판(15/30/40/AD), 코트 위 선수 캡슐과 공, 속도 1×/4×/16×, 일시정지, "다음 체인지오버까지".
 3. 체인지오버: 이번 구간과 누적 표, 체력 줄, 상대 코치 알림(Safe로 시작하면 첫 체인지오버에 나옴), 칩과 두 버튼.
 4. 리뷰: 구간 흐름, 게임 승자 줄, 착지 히트맵과 범례, 전체 기록.
-5. 한글이 네모로 나오지 않는지, 1280×800 기준으로 잘리는 곳이 없는지.
+5. 한글이 네모로 나오지 않는지, 굵은 글자가 이중으로 굵어지지 않는지, 숫자 자릿수가 맞는지, 1280×800 기준으로
+   잘리는 곳이 없는지. 폰트 가져오기 설정이 Dynamic인지.
 
 결과는 이 문서에 새 절로 기록한다. 확인 전에는 위 상태 줄을 바꾸지 않는다.

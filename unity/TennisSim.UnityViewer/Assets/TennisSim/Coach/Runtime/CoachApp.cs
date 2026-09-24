@@ -19,12 +19,15 @@ namespace TennisSim.Coach
         public float Speed { get; private set; } = 4;
         public bool Paused { get; private set; }
 
-        Font sans, mono;
+        // Bundled fonts (design system type.fonts): Pretendard for text, JetBrains Mono for numbers. Legacy Font assets
+        // import with a dynamic atlas, so only the glyphs actually drawn are rasterised.
+        Font sansRegular, sansBold, monoMedium, monoBold;
         Tactic pending = new Tactic();
         VisualElement screen;
         // Live match widgets, updated in place every frame.
         CourtView court;
-        Label[] gameLabels, pointLabels, serveMarks, tacticLabels;
+        Label[] gameLabels, pointLabels, tacticLabels;
+        VisualElement[] serveMarks;
         Label pointInfo;
         VisualElement feedList;
         int feedCount = -1;
@@ -80,26 +83,44 @@ namespace TennisSim.Coach
             Root = document.rootVisualElement;
             Root.styleSheets.Add(Resources.Load<StyleSheet>("TennisSimCoach"));
             Root.AddToClassList("tsc-root");
-            // The design system names system fonts only. Korean needs an OS font with Hangul glyphs.
-            sans = Font.CreateDynamicFontFromOSFont(new[] { "Apple SD Gothic Neo", "AppleSDGothicNeo-Regular", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", "NanumGothic", "Arial Unicode MS" }, 16);
-            mono = Font.CreateDynamicFontFromOSFont(new[] { "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono" }, 16);
-            Root.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(sans));
+            sansRegular = LoadFont("Pretendard-Regular"); sansBold = LoadFont("Pretendard-Bold");
+            monoMedium = LoadFont("JetBrainsMono-Medium"); monoBold = LoadFont("JetBrainsMono-Bold");
+            Root.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(sansRegular));
         }
 
         // ---------- helpers ----------
         static VisualElement Box(params string[] classes) { var e = new VisualElement(); foreach (var c in classes) e.AddToClassList(c); return e; }
         // The label style is uppercase; USS has no text-transform, so the bound string is converted (Korean is unaffected).
-        static Label Text(string text, params string[] classes)
+        Label Text(string text, params string[] classes)
         {
             var l = new Label(Array.IndexOf(classes, "tsc-label") >= 0 ? text.ToUpperInvariant() : text);
             foreach (var c in classes) l.AddToClassList(c);
+            ApplyFont(l, text, classes);
             return l;
         }
-        Label Number(string text, string cls) { var l = Text(text, cls); l.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(mono)); return l; }
-        static Label Badge(int player) => Text(player == 0 ? "A" : "B", "tsc-label", "tsc-badge", player == 0 ? "tsc-badge--a" : "tsc-badge--b");
-        static Button MakeButton(string text, Action onClick, bool primary)
+        static Font LoadFont(string name)
+        {
+            var font = Resources.Load<Font>("Fonts/" + name);
+            if (font == null) Debug.LogError("TennisSim coach font missing: Resources/Fonts/" + name);
+            return font;
+        }
+        // Type steps with weight 600/700 (headline, title, label, score) use the Bold file; the USS keeps font style
+        // normal so the Bold file is not emboldened again. score/stat use JetBrains Mono unless the text holds Hangul,
+        // which JetBrains Mono lacks.
+        void ApplyFont(VisualElement e, string text, IList<string> classes)
+        {
+            bool bold = classes.Contains("tsc-headline") || classes.Contains("tsc-title") || classes.Contains("tsc-label") || classes.Contains("tsc-score");
+            bool mono = (classes.Contains("tsc-score") || classes.Contains("tsc-stat")) && !HasHangul(text);
+            var font = mono ? (bold ? monoBold : monoMedium) : (bold ? sansBold : sansRegular);
+            if (font != null) e.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(font));
+        }
+        static bool HasHangul(string text) => text != null && text.Any(c => (c >= '\uAC00' && c <= '\uD7A3') || (c >= '\u1100' && c <= '\u11FF') || (c >= '\u3130' && c <= '\u318F'));
+        Label Number(string text, string cls) => Text(text, cls);
+        Label Badge(int player) => Text(player == 0 ? "A" : "B", "tsc-label", "tsc-badge", player == 0 ? "tsc-badge--a" : "tsc-badge--b");
+        Button MakeButton(string text, Action onClick, bool primary)
         {
             var b = new Button(onClick) { text = text.ToUpperInvariant() };
+            ApplyFont(b, text, new[] { "tsc-label" });
             b.AddToClassList("tsc-button"); b.AddToClassList(primary ? "tsc-button--primary" : "tsc-button--secondary");
             return b;
         }
@@ -212,11 +233,14 @@ namespace TennisSim.Coach
             var board = Box(); board.style.borderTopWidth = board.style.borderBottomWidth = board.style.borderLeftWidth = board.style.borderRightWidth = 1;
             board.style.borderTopColor = board.style.borderBottomColor = board.style.borderLeftColor = board.style.borderRightColor = Hex("#8c969e");
             board.style.paddingLeft = board.style.paddingRight = 16; board.style.paddingTop = board.style.paddingBottom = 8; board.style.marginBottom = 16;
-            gameLabels = new Label[2]; pointLabels = new Label[2]; serveMarks = new Label[2];
+            gameLabels = new Label[2]; pointLabels = new Label[2]; serveMarks = new VisualElement[2];
             var names = new[] { Session.Input.Players[0].Name, Session.Input.Players[1].Name };
             for (int i = 0; i < 2; i++)
             {
-                serveMarks[i] = Text("●", "tsc-title"); serveMarks[i].style.color = Hex("#ffeb04"); serveMarks[i].style.marginLeft = 8;
+                // The serving mark is the ball itself, drawn as a dot rather than a glyph.
+                serveMarks[i] = Box(); serveMarks[i].style.width = serveMarks[i].style.height = 12; serveMarks[i].style.backgroundColor = Hex("#ffeb04");
+                serveMarks[i].style.borderTopLeftRadius = serveMarks[i].style.borderTopRightRadius = serveMarks[i].style.borderBottomLeftRadius = serveMarks[i].style.borderBottomRightRadius = 6;
+                serveMarks[i].style.marginLeft = 8;
                 gameLabels[i] = Number("0", "tsc-score"); gameLabels[i].style.width = 64; gameLabels[i].style.unityTextAlign = TextAnchor.MiddleRight;
                 pointLabels[i] = Number("0", "tsc-score"); pointLabels[i].style.width = 96; pointLabels[i].style.unityTextAlign = TextAnchor.MiddleRight;
                 board.Add(Row(Badge(i), Text(names[i], "tsc-title"), serveMarks[i], Box("tsc-grow"), gameLabels[i], pointLabels[i]));
@@ -237,6 +261,7 @@ namespace TennisSim.Coach
                 {
                     var speed = s;
                     var chip = new Button(() => { Speed = speed; DrawSpeeds(); }) { text = s + "×" };
+                    ApplyFont(chip, chip.text, new[] { "tsc-label" });
                     chip.AddToClassList("tsc-chip"); chip.AddToClassList("tsc-label");
                     if (Mathf.Approximately(Speed, s)) chip.AddToClassList("tsc-chip--selected");
                     chip.style.marginLeft = 8; chip.style.marginBottom = 0;

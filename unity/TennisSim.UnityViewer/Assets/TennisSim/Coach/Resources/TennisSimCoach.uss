@@ -22,12 +22,13 @@
 .tsc-root { flex-grow: 1; background-color: var(--ground); }
 .tsc-root .unity-text-element { color: var(--line); white-space: normal; margin: 0; padding: 0; }
 
-/* Type */
-.tsc-root .tsc-headline { font-size: 28px; -unity-font-style: bold; letter-spacing: -0.28px; min-height: 34px; }
-.tsc-root .tsc-title { font-size: 18px; -unity-font-style: bold; min-height: 24px; }
+/* Type. Weight comes from the font file (C# assigns Pretendard-Bold or JetBrainsMono-Bold for 600/700 steps),
+   so -unity-font-style stays normal to avoid a synthetic bold on top of the bold file. */
+.tsc-root .tsc-headline { font-size: 28px; -unity-font-style: normal; letter-spacing: -0.28px; min-height: 34px; }
+.tsc-root .tsc-title { font-size: 18px; -unity-font-style: normal; min-height: 24px; }
 .tsc-root .tsc-body { font-size: 15px; min-height: 22px; }
-.tsc-root .tsc-label { font-size: 12px; -unity-font-style: bold; letter-spacing: 0.72px; min-height: 16px; }
-.tsc-root .tsc-score { font-size: 40px; -unity-font-style: bold; min-height: 44px; }
+.tsc-root .tsc-label { font-size: 12px; -unity-font-style: normal; letter-spacing: 0.72px; min-height: 16px; }
+.tsc-root .tsc-score { font-size: 40px; -unity-font-style: normal; min-height: 44px; }
 .tsc-root .tsc-stat { font-size: 14px; min-height: 20px; }
 .tsc-root .tsc-muted { color: var(--line-muted); }
 /* net text only on ground */
@@ -61,7 +62,7 @@
 .tsc-root .tsc-chip--selected .unity-text-element { color: var(--on-selected); }
 
 /* Buttons */
-.tsc-root .tsc-button { min-height: 48px; padding: 0 32px; border-radius: 4px; margin: 0 0 0 8px; -unity-font-style: bold; font-size: 12px; letter-spacing: 0.72px; }
+.tsc-root .tsc-button { min-height: 48px; padding: 0 32px; border-radius: 4px; margin: 0 0 0 8px; -unity-font-style: normal; font-size: 12px; letter-spacing: 0.72px; }
 .tsc-root .tsc-button--primary { background-color: var(--selected); color: var(--on-selected); border-width: 0; }
 .tsc-root .tsc-button--secondary { background-color: var(--ground); color: var(--line); border-width: 1px; border-color: var(--line); }
 

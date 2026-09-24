@@ -227,6 +227,8 @@ namespace TennisSim.Coach
                 var group = descriptions ? Box("tsc-panel", "tsc-gap-bottom") : Box("tsc-gap-bottom");
                 group.Add(Text(g.Label, "tsc-label", "tsc-gap-bottom"));
                 var row = Box("tsc-row");
+                // Chips are flex-basis 0 / grow 1, so this row never actually wraps. If chips get a minimum width, build
+                // the rows in C# like the review segment cards: Yoga does not grow the parent for wrapped lines.
                 row.style.flexWrap = Wrap.Wrap;
                 // Chips carry an 8px right margin; pull the row out by it so the last chip meets the panel padding.
                 row.style.marginRight = -8;

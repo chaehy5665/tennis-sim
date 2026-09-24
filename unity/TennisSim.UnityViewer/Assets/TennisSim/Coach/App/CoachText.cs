@@ -11,7 +11,8 @@ namespace TennisSim.Coach
         public static string Aggression(Aggression a) => a == Core.Aggression.Safe ? "안전" : a == Core.Aggression.Aggressive ? "공격" : "균형";
         public static string Serve(ServeDirection s) => s == ServeDirection.Wide ? "와이드" : s == ServeDirection.Body ? "바디" : s == ServeDirection.T ? "T" : "혼합";
         public static string Tactic(Tactic t) => Target(t.Target) + " · " + Aggression(t.Aggression) + " · " + Serve(t.Serve);
-        public static string Short(Tactic t) => (t.Target == TargetStyle.TargetBackhand ? "백핸드" : "균형") + "·" + Aggression(t.Aggression) + "·" + Serve(t.Serve);
+        // Spaced separators: KeepAll joins Hangul to its neighbours, so an unspaced "균형·안전·혼합" could not wrap at all.
+        public static string Short(Tactic t) => (t.Target == TargetStyle.TargetBackhand ? "백핸드" : "균형") + " · " + Aggression(t.Aggression) + " · " + Serve(t.Serve);
 
         public static string Stroke(string stroke) => stroke == "Forehand" ? "포핸드" : stroke == "Backhand" ? "백핸드" : stroke == "Serve" ? "서브" : stroke;
 

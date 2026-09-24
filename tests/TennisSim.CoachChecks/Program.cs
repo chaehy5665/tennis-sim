@@ -156,6 +156,7 @@ Test("Korean words stay whole: word joiners only around Hangul, never at spaces"
     Check(once == twice, "idempotent");
     Check(once.Replace(J.ToString(), "") == "Ember의 백핸드 에러율이 23%로", "only joiners added");
     Check(once.Split(' ').Length == 4, "spaces untouched");
+    Check(CoachText.KeepAll(CoachText.Short(new Tactic())).Split(' ').Length == 5, "short tactic text keeps break points between settings");
 });
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;

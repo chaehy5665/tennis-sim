@@ -157,7 +157,9 @@ namespace TennisSim.Core
         {
             if (isServe && ++serveLaunches > config.MaxServeAttempts) throw new SimulationLimitExceeded("Maximum serve attempts including lets");
             var p = input.Players[player]; var self = players[player];
-            double preparation = isServe ? 1 : Math.Max(.1, 1 - .32 * self.Velocity.GroundLength / p.MaxSpeed - .20 * Vec3.GroundDistance(self.Position, ball.Position) / config.Reach);
+            // Moving at contact and a ball away from the ideal stance distance (jammed or stretched) both cost preparation.
+            double stanceError = Math.Abs(Vec3.GroundDistance(self.Position, ball.Position) - Movement.StrokeOffset);
+            double preparation = isServe ? 1 : Math.Max(.1, 1 - .32 * self.Velocity.GroundLength / p.MaxSpeed - .20 * stanceError / (config.Reach - Movement.StrokeOffset));
             var choice = ShotPolicy.Choose(p, self, input.Players[1 - player], players[1 - player], ball.Position, tactics[player], isServe, serve.Attempt, score.DeuceSide, preparation, config, rng);
             activeAction = isServe ? ++actionCounter : receiverAction;
             if (isServe) Emit("ServeStarted", time, player, action: activeAction);
@@ -195,6 +197,7 @@ namespace TennisSim.Core
                 receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out double arrival, out bool reachable, surface, receiverReaction, comfortableOnly: true);
                 receiverComfortable = reachable;
                 if (!reachable) receiverTarget = Movement.PredictContact(rp, players[receiver], ball, config, time - lastHitTime, out arrival, out reachable, surface, receiverReaction);
+                receiverTarget = Movement.Stance(rp, players[receiver], receiverTarget);
                 receiverPlanned = true;
                 var action = Emit("ContactPrepared", time, receiver, reason: reachable ? "PredictedReachable" : "UnreachableContact", action: receiverAction);
                 action.IntendedTarget = receiverTarget; action.PredictedContactTime = time + arrival;

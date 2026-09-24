@@ -71,6 +71,18 @@ namespace TennisSim.Core
         // player takes the first legal height instead, which rules out an attacking shot (see ShotPolicy).
         public const double ComfortableContactHeight = .9;
         public static bool Comfortable(BallState ball) => ball.Position.Y >= ComfortableContactHeight || ball.Velocity.Y <= 0;
+        // A player lines up beside the ball, not on it, and keeps it on the side it is arriving on: a ball wide of the
+        // current body position is played on that side. Standing on the ball made the stroke a coin flip, so aiming at
+        // a backhand did not produce backhands. StrokeOffset is the lateral body-ball distance at an ideal contact. It
+        // must stay well inside Reach: PredictContact lets a player stop Reach*.65 short, and at .6 m that slack plus
+        // the offset left receivers out of reach (unreturned balls 41% -> 67% of points).
+        public const double StrokeOffset = .35;
+        public static Vec3 Stance(PlayerProfile p, PlayerState s, Vec3 contact)
+        {
+            double forehandSide = Court.RightX(s.End) * (p.LeftHanded ? -1 : 1);
+            double side = Court.IsForehand(s.Position, contact, s.End, p.LeftHanded) ? forehandSide : -forehandSide;
+            return new Vec3(contact.X - side * StrokeOffset, 0, contact.Z);
+        }
         // reactionSeconds overrides the profile value when the receiver has read the opponent's pattern.
         public static bool CanContact(PlayerProfile p, PlayerState s, BallState ball, double sinceOpponentHit, SimConfig c, double? reactionSeconds = null, bool comfortableOnly = false) =>
             (!comfortableOnly || Comfortable(ball)) &&

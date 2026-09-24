@@ -198,3 +198,12 @@ of every engine was biased by small seeds. v4 changes, all described in [MODEL.m
 All v3 replays remain viewable; resimulate refuses them. Tactic balance and rally length are game design targets,
 not empirical calibration: `REALISM_CALIBRATED=false`.
 
+## Receiver stance v5 (2026-09-24)
+
+`EngineVersion` is now tennissim-mvp-5 (schema 1.0 unchanged, viewer accepts v1 to v5). A receiver used to run onto
+the predicted contact point, so forehand or backhand was decided by tiny arrival differences and a shot aimed at
+one side was played on that side only about 69% of the time. Now the receiver keeps the ball on the side it
+arrives on and stands 0.35 m beside it (`Movement.Stance`); the aimed side is followed about 99% of the time.
+Targeting the backhand now pays against weak backhands and costs against strong ones
+([BALANCE_DIAGNOSIS.md](docs/BALANCE_DIAGNOSIS.md), "v5 결과"). v4 replays remain viewable; resimulate refuses them.
+

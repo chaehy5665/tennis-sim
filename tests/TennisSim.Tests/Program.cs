@@ -210,6 +210,39 @@ Test("Rushed receivers wait for comfortable height only when they can", () =>
     var p = PlayerProfile.Preset("baseline", "A"); var s = new PlayerState { End = 1, Position = new Vec3(0, 0, 11) };
     Check(Movement.CanContact(p, s, rising, 1, config) && !Movement.CanContact(p, s, rising, 1, config, comfortableOnly: true));
 });
+Test("Receivers line up beside the ball on the side it arrives on", () =>
+{
+    var right = PlayerProfile.Preset("baseline", "A"); var left = right.Copy(); left.LeftHanded = true;
+    foreach (var end in new[] { -1, 1 })
+        foreach (var p in new[] { right, left })
+            foreach (var dx in new[] { -2.0, 2.0 })
+            {
+                var s = new PlayerState { End = end, Position = new Vec3(0, 0, end * 11) };
+                var contact = new Vec3(dx, 0, end * 10);
+                bool forehand = Court.IsForehand(s.Position, contact, end, p.LeftHanded);
+                var stance = Movement.Stance(p, s, contact);
+                Near(Vec3.GroundDistance(stance, contact), Movement.StrokeOffset); Near(stance.Z, contact.Z);
+                Check(Court.IsForehand(stance, contact, end, p.LeftHanded) == forehand, "stance keeps the stroke side");
+                Check(Math.Abs(stance.X) < Math.Abs(contact.X), "stance is on the near side of the ball");
+            }
+});
+Test("A rally shot aimed at a side is played on that side", () =>
+{
+    var input = new MatchInput(); input.Players[1] = PlayerProfile.Preset("baseline", "B");
+    int aimed = 0, followed = 0;
+    foreach (uint seed in new uint[] { 1, 2, 3 })
+    {
+        var hits = Run(seed, input: input).Events.Where(e => e.Kind == "BallHit").ToList();
+        for (int i = 1; i < hits.Count; i++)
+        {
+            var a = hits[i - 1]; var b = hits[i];
+            if (a.Point != b.Point || a.ShotKind == "Serve" || a.Reason is not ("Backhand" or "Forehand")) continue;
+            aimed++; if (b.Stroke == a.Reason) followed++;
+        }
+    }
+    // Before tennissim-mvp-5 receivers stood on the ball and followed the aimed side about 69% of the time.
+    Check(aimed > 100 && followed >= .95 * aimed, $"followed {followed}/{aimed}");
+});
 Test("Aggressive changes feasible attack frequency; Safe changes speed constraints", () =>
 {
     int safe = 0, aggressive = 0; double sv = 0, av = 0;

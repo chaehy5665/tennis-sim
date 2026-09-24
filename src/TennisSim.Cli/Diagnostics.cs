@@ -109,7 +109,7 @@ public static class Diagnostics
     public static string Hash(string value) => Hash(System.Text.Encoding.UTF8.GetBytes(value));
     public static Report Analyze(MatchRecord r, string file, string hash, string sourceId)
     {
-        if (r.EngineVersion is not ("tennissim-mvp-1" or "tennissim-mvp-2" or "tennissim-mvp-3" or "tennissim-mvp-4")) throw new ArgumentException("Unsupported diagnostic engine contract");
+        if (r.EngineVersion is not ("tennissim-mvp-1" or "tennissim-mvp-2" or "tennissim-mvp-3" or "tennissim-mvp-4" or "tennissim-mvp-5")) throw new ArgumentException("Unsupported diagnostic engine contract");
         r.Input.Config.Validate();
         foreach (var p in r.Input.Players) p.Validate();
         if (r.Frames.Where((f, i) => !double.IsFinite(f.Time) || f.Time < 0 || (i > 0 && f.Time < r.Frames[i - 1].Time)).Any()) throw new ArgumentException("Invalid frame time order");

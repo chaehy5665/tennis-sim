@@ -184,3 +184,19 @@ hashes. The viewer loader accepts v1 to v4. Linux x64 values for the same two co
 Linux checks at the v4 commit: both records regenerate byte-identically, resimulate with chunk 137 is identical for
 both, ViewerChecks `--general` passes 14/14 on both, and the fixed v1 fixture still passes 14/14. Unity Editor,
 EditMode, PlayMode and screen review remain NOT_RUN for v4.
+
+## 2026-09-24 engine tennissim-mvp-5
+
+The receiver stance change (see [BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md), "v5 결과") produces tennissim-mvp-5
+records. `ReplayLoader` now accepts v1 to v5; that is the only Unity source change. The coach UI runs the Core DLL
+directly, so it picks up the new behaviour after `scripts/sync-core-to-unity.sh`. Linux x64 values for the same two
+commands:
+
+| Record | Linux SHA-256 | Result |
+|---|---|---|
+| v5 legacy, seed 42 | fcb674d701a08f78cdb2fc215f7c2b3d92c14860ef7a902f3ff1671a7dc6a4ae | B 6-0, 31 points, 1,742 events |
+| v5 impulse, seed 42 | f43e205f357d8b367a23f80ae33716b6118dfea7856a91175b5eaf13f49a818e | B 6-1, 36 points, 1,661 events |
+
+Linux checks: both records regenerate byte-identically, resimulate with chunk 137 is identical for both,
+ViewerChecks `--general` passes 14/14 on both, and the tracked fixture `StreamingAssets/Replays/sample-42.json`
+still passes 14/14. Unity compile, EditMode, PlayMode and the coach UI on the Mac are NOT_RUN for v5.

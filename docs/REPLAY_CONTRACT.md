@@ -98,6 +98,10 @@ tennissim-mvp-3 keeps schema 1.0 and adds optional fields. The viewer accepts te
 tennissim-mvp-4 keeps schema 1.0 with no new fields: seed mixing, the tactic model, pattern reading and
 comfortable contact change outcomes only. Candidate lists may now contain a Forehand candidate. The viewer
 accepts tennissim-mvp-1 to -4; resimulate accepts only the current engine version.
+tennissim-mvp-5 keeps schema 1.0 with no new fields. The receiver now moves to a stance beside the predicted
+contact (0.35 m to the side of the chosen stroke) instead of onto it, so `ContactPrepared` target body positions
+and contact distances differ, and preparation quality measures distance from that stance. Outcomes change;
+event kinds and meanings do not. The viewer accepts tennissim-mvp-1 to -5.
 
 - MatchInput.Surface (optional): the surface environment for the explicit impulse model — ball spec, ball
   condition, interaction profile and tolerances. Absent (null) for the legacy multiplicative bounce. It is

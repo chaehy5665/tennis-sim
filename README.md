@@ -35,6 +35,10 @@ dotnet run --project src/TennisSim.Cli --no-build -- compare \
 dotnet run --project src/TennisSim.Cli --no-build -- points \
   --count 1000 --seed 100 --out artifacts/points-1000.json
 
+# 전술 밸런스 격자: 선수 조합 × 전술별 독립 포인트 승률 (docs/BALANCE_DIAGNOSIS.md)
+dotnet run --project src/TennisSim.Cli --no-build -- balance \
+  --count 2000 --seed 100 --out artifacts/balance/balance-2000.json
+
 # 기록 재생: Core를 재실행하지 않고 저장된 득점 사건을 텍스트 표시
 dotnet run --project src/TennisSim.Cli --no-build -- replay \
   --input artifacts/sample-42.json

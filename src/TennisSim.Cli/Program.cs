@@ -13,9 +13,10 @@ internal static class Cli
     {
         if (args.Length == 0 || args[0] is "help" or "--help")
         {
-            Console.WriteLine("TennisSim: match | compare | points | bounce | replay | resimulate | diagnose | scenarios\n" +
+            Console.WriteLine("TennisSim: match | compare | points | balance | bounce | replay | resimulate | diagnose | scenarios\n" +
                 "match --seed 42 --player-a baseline --player-b defender --tactics-a backhand --out artifacts/match.json\n" +
                 "compare --seeds 11,22,33,44,55 --out artifacts/comparison.json\npoints --count 1000 --seed 100 --out artifacts/points.json\n" +
+                "balance --count 2000 --seed 100 --out artifacts/balance.json\n" +
                 "bounce --input impact.json --surface-model impulse --profile profiles/pair.json --out artifacts/bounce.json\n" +
                 "diagnose --input artifacts/match.json --out artifacts/audit.json --source-id SOURCE\nscenarios --out artifacts/scenarios.json\n" +
                 "replay --input artifacts/match.json\nresimulate --input artifacts/match.json --out artifacts/resimulated.json\n" +
@@ -130,6 +131,16 @@ internal static class Cli
                 ReplayJson.Save(Get("out", "artifacts/points.json"), new { count, initialSeed, seedRule = "initialSeed+i modulo uint32", firstServerRule = "i%2", endARule = "(i/2)%2 == 0 ? -1 : +1", input = initialInput, shots, ticks, failures, endReasons = reasons });
                 Console.WriteLine($"POINT_BATCH count={count} completed={count - failures.Count} failures={failures.Count} shots={shots} ticks={ticks}");
                 return failures.Count == 0 ? 0 : 1;
+            }
+            case "balance":
+            {
+                int count = int.Parse(Get("count", "2000")); if (count < 2 || count > 100000) throw new ArgumentException("count must be 2..100000");
+                uint seed = uint.Parse(Get("seed", "100"));
+                var cells = BalanceGrid.Run(count, seed);
+                ReplayJson.Save(Get("out", "artifacts/balance.json"), new { schemaVersion = "1.0", realismCalibrated = false, engineVersion = new MatchRecord().EngineVersion, count, initialSeed = seed, seedRule = "lowbias32(initialSeed+i modulo uint32), shared by every cell", firstServerRule = "i%2", endARule = "(i/2)%2 == 0 ? -1 : +1", cells });
+                int failures = cells.Sum(c => c.Failures);
+                Console.WriteLine($"BALANCE cells={cells.Count} pointsPerCell={count} rallyLimits={cells.Sum(c => c.RallyLimits)} failures={failures}");
+                return failures == 0 ? 0 : 1;
             }
             default: throw new ArgumentException("Unknown command: " + args[0]);
         }

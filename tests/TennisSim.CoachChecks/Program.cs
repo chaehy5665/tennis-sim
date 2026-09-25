@@ -269,15 +269,15 @@ Test("Broadcast: the far baseline looks shorter and higher than the near one", (
 });
 Test("Broadcast: the numbers in the design system match the camera", () =>
 {
-    // broadcast.md: near baseline y≈527, far baseline y≈269, a player 19 m behind the net: near foot y≈693, far head y≈181.
-    Check(Math.Abs(cam.Project(new Vec3(0, 0, -Court.HalfLength)).Y - 527) < 1, "near baseline");
-    Check(Math.Abs(cam.Project(new Vec3(0, 0, Court.HalfLength)).Y - 269) < 1, "far baseline");
+    // broadcast.md: near baseline y≈489, far baseline y≈240, a player 20.5 m behind the net: near foot y≈688, far head y≈143.
+    Check(Math.Abs(cam.Project(new Vec3(0, 0, -Court.HalfLength)).Y - 489) < 1, "near baseline");
+    Check(Math.Abs(cam.Project(new Vec3(0, 0, Court.HalfLength)).Y - 240) < 1, "far baseline");
     var nearFoot = cam.Player(new Vec3(0, 0, -BroadcastSpec.FramedDepth)); var farHead = cam.Player(new Vec3(0, 0, BroadcastSpec.FramedDepth));
-    Check(Math.Abs(nearFoot.Foot.Y - 693) < 1 && Math.Abs(farHead.Head.Y - 181) < 1, "framed depth");
+    Check(Math.Abs(nearFoot.Foot.Y - 688) < 1 && Math.Abs(farHead.Head.Y - 143) < 1, "framed depth");
     Check(nearFoot.Foot.Y + nearFoot.ShadowRadiusY <= BroadcastSpec.ControlBar.Y - 4, "the deepest near player stays above the control bar");
     Check(farHead.Badge.Y >= BroadcastSpec.SafeArea.Y, "the deepest far player's badge stays below the safe-area top");
     double nearW = BroadcastSpec.LineWidth(cam.Project(new Vec3(0, 0, -Court.HalfLength)).Depth), farW = BroadcastSpec.LineWidth(cam.Project(new Vec3(0, 0, Court.HalfLength)).Depth);
-    Check(Math.Abs(nearW - 2.0) < .1 && Math.Abs(farW - 1.2) < .1, $"line width near {nearW:0.00}, far {farW:0.00}");
+    Check(Math.Abs(nearW - 1.95) < .1 && Math.Abs(farW - 1.16) < .1, $"line width near {nearW:0.00}, far {farW:0.00}");
 });
 Test("Broadcast: the ball keeps its recorded place, a fixed 11 px size and a shadow straight below", () =>
 {
@@ -305,20 +305,23 @@ Test("Broadcast: HUD plates sit inside the safe area and off the court corridor"
                 Check(!InPolygon(court, x, y), $"plate at {plate.X},{plate.Y} covers the court at {x},{y}");
     }
 });
-Test("Broadcast: recorded players and their badges stay in view; the ball is counted", () =>
+Test("Broadcast: recorded players stay in view and are never covered by a HUD plate; the ball is counted", () =>
 {
     var rec = BroadcastRecord(out var source); var view = BroadcastSpec.Viewport;
-    int ballOut = 0, samples = 0;
+    int ballOut = 0, samples = 0; double deepest = 0;
     foreach (var f in rec.Frames)
     {
         foreach (var pl in f.Players)
         {
-            var m = cam.Player(pl.Position);
+            var m = cam.Player(pl.Position); deepest = Math.Max(deepest, Math.Abs(pl.Position.Z));
             Check(InsideRect(view, m.Foot) && view.Contains(m.Badge.X, m.Badge.Y) && view.Contains(m.Badge.Right, m.Badge.Bottom), $"player {pl.Id} at {pl.Position.X:0.0},{pl.Position.Z:0.0} ({source})");
+            var body = new ScreenRect(m.Foot.X - m.ShadowRadiusX, m.Badge.Y, 2 * m.ShadowRadiusX, m.Foot.Y + m.ShadowRadiusY - m.Badge.Y);
+            foreach (var plate in BroadcastSpec.HudPlates) Check(!plate.Overlaps(body), $"a HUD plate at {plate.X},{plate.Y} covers player {pl.Id} at {pl.Position.X:0.0},{pl.Position.Z:0.0} ({source})");
         }
         samples++; if (!InsideRect(view, cam.Ball(f.Ball.Position).Ball)) ballOut++;
     }
-    Console.WriteLine($"  {source}: {samples} frames, ball outside the viewport in {ballOut}");
+    Console.WriteLine($"  {source}: {samples} frames, deepest player {deepest:0.0} m, ball outside the viewport in {ballOut}");
+    Check(deepest <= BroadcastSpec.FramedDepth, $"a player stood {deepest:0.0} m back, beyond the framed {BroadcastSpec.FramedDepth} m");
     Check(ballOut * 100 <= samples, "ball leaves the view in at most 1% of frames");
 });
 

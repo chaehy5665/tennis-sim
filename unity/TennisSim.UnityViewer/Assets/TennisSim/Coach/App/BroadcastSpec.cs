@@ -11,17 +11,18 @@ namespace TennisSim.Coach
         public const double ScreenWidth = 1280, ScreenHeight = 800, HeaderHeight = 56, SafeInset = 32;
 
         // Broadcast camera, court centre at the origin (x across, y up, z along the court, metres). Framed so that a
-        // player anywhere the engine has put one (|z| up to 18.9 m behind the net on engine v6, seed 42) stays in
-        // view: the near foot at 19 m stays above the control bar and the far badge below the safe-area top.
-        public static readonly Vec3 CameraPosition = new Vec3(0, 12, -42);
-        public static readonly Vec3 CameraTarget = new Vec3(0, 0, -5.5);
-        public const double VerticalFovDegrees = 26;
-        public const double FramedDepth = 19;
+        // player as deep as the engine has put one stays in view with some margin (|z| up to 19.9 m behind the net on
+        // engine v6, big-server v retriever seed 3): at 20.5 m the near shadow stays above the control bar and the far
+        // badge below the safe-area top.
+        public static readonly Vec3 CameraPosition = new Vec3(0, 11, -44);
+        public static readonly Vec3 CameraTarget = new Vec3(0, 0, -8);
+        public const double VerticalFovDegrees = 23;
+        public const double FramedDepth = 20.5;
 
-        // The painted run-off: as wide as the viewer's (18 m) and long enough (40 m) that deep players still stand on
+        // The painted run-off: as wide as the viewer's (18 m) and long enough (43 m) that deep players still stand on
         // court colour. The net posts: NetHeight's profile reaches its full
         // height at |x| = 5.029 m, which is where the posts stand.
-        public const double RunOffHalfWidth = 9, RunOffHalfLength = 20, NetPostX = 5.029;
+        public const double RunOffHalfWidth = 9, RunOffHalfLength = 21.5, NetPostX = 5.029;
 
         // Players: a camera-facing capsule on a ground shadow disc, and a screen-fixed A/B badge above the head.
         public const double PlayerHeight = 1.8, PlayerWidth = .6;
@@ -41,10 +42,12 @@ namespace TennisSim.Coach
         // Motion timing chosen by the renderer. The contact frame itself is always the BallHit time.
         public const double PrepareLead = .35, FollowThrough = .3, MissGrace = .1, LateSideSwitch = .15;
 
-        // HUD plates over the scene (x, y, width, height in px). All sit inside the title-safe area.
+        // HUD plates over the scene (x, y, width, height in px). All sit inside the title-safe area, clear of the court
+        // and of every player position in the checked records. The last-point plate sits under the scoreboard: at the
+        // bottom left it hid deep near players standing wide.
         public static readonly ScreenRect Scoreboard = new ScreenRect(32, 88, 300, 84);
         public static readonly ScreenRect CurrentTactic = new ScreenRect(928, 88, 320, 60);
-        public static readonly ScreenRect LastPoint = new ScreenRect(32, 652, 360, 44);
+        public static readonly ScreenRect LastPoint = new ScreenRect(32, 180, 320, 44);
         public static readonly ScreenRect ControlBar = new ScreenRect(32, 712, 1216, 56);
         public static ScreenRect[] HudPlates => new[] { Scoreboard, CurrentTactic, LastPoint, ControlBar };
 

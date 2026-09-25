@@ -25,8 +25,11 @@
 | 담는 깊이 | `BroadcastSpec.FramedDepth` | 네트에서 이만큼 떨어진 선수까지 화면에 담는다 |
 
 - 카메라는 한쪽 끝에 고정한다. 선수가 엔드를 바꾸면 A가 위에도 아래에도 온다. 구분은 배지로 한다.
-- **디자인 시스템 v29 시안에서 바뀐 점(v32에 반영)**: v29는 위치 (0, 13, −34), 바라보는 점 (0, 0, −3), 28°였다. 실제 engine v6 기록(seed 42)에서 선수가 네트에서 |z| 18.9 m까지 물러나(프레임의 약 0.9%가 17 m 너머) 가까운 쪽 선수가 조작 막대 아래로, 먼 쪽 배지가 화면 밖으로 나갔다. 그래서 19 m 떨어진 선수의 발 그림자가 조작 막대 위에, 배지가 안전 영역 안에 오도록 다시 잡았다. 대가로 가까운 베이스라인이 약 15% 짧아졌다(483 → 410 px).
-- 지금 값에서의 기준 위치(검사가 1 px 안에서 확인한다): 가까운 베이스라인 y≈527, 먼 베이스라인 y≈269, 네트에서 19 m 떨어진 가까운 선수의 발 y≈693, 먼 선수의 머리 y≈181.
+- **바뀐 과정**:
+  - v29 시안: 위치 (0, 13, −34), 바라보는 점 (0, 0, −3), 28°. 선수가 네트에서 15.6 m까지만 물러난다고 가정했다.
+  - v32: (0, 12, −42), (0, 0, −5.5), 26°, 19 m 기준. engine v6 seed 42 기록에서 선수가 |z| 18.9 m까지 물러나(프레임의 약 0.9%가 17 m 너머) 가까운 선수가 조작 막대에 가리고 먼 배지가 화면 밖으로 나갔기 때문이다.
+  - v33(지금): (0, 11, −44), (0, 0, −8), 23°, 20.5 m 기준. 선수 유형 조합 14경기에서 가장 깊은 선수는 big-server 대 retriever seed 3의 19.9 m였다(리더 확인). 미리 보기 도구로 그 순간을 그리자 19 m 틀에서는 발이 조작 막대에 걸리고 왼쪽 아래 직전 포인트 판에 가렸다. 카메라를 낮추고 화각을 좁혀 20.5 m까지 담으면서도 가까운 베이스라인이 오히려 길어졌다(410 → 444 px). 원근은 조금 더 눕는다.
+- 지금 값에서의 기준 위치(검사가 1 px 안에서 확인한다): 가까운 베이스라인 y≈489(폭 444 px), 먼 베이스라인 y≈240(폭 266 px), 네트에서 20.5 m 떨어진 가까운 선수의 발 y≈688, 먼 선수의 머리 y≈143.
 
 ## 에셋 목록 (뒤에서 앞으로 그리는 순서)
 
@@ -34,7 +37,7 @@
 |---|---|---|---|---|---|
 | 1 | 바탕 | 화면 | 뷰포트 전체 | `ground` | — |
 | 2 | 코트 면(런오프 포함) | 월드 | 지면 사각형, 반폭 `RunOffHalfWidth`, 반길이 `RunOffHalfLength` | `court` | `BroadcastCourt.RunOffCorners` |
-| 3 | 코트 라인 | 월드 | 베이스라인 2, 단식 사이드라인 2, 서비스 라인 2, 센터 서비스 라인, 센터 마크 2(10 cm). 두께는 화면 px로 깊이에 따라 `LineWidth(depth)`(가까운 베이스라인 약 2 px, 먼 쪽 약 1.2 px, 최소 `MinLineWidth`) | `line` | `Court.HalfWidth`, `Court.HalfLength`, `Court.ServiceLine` → `BroadcastCourt.Lines()` |
+| 3 | 코트 라인 | 월드 | 베이스라인 2, 단식 사이드라인 2, 서비스 라인 2, 센터 서비스 라인, 센터 마크 2(10 cm). 두께는 화면 px로 깊이에 따라 `LineWidth(depth)`(가까운 베이스라인 약 1.9 px, 먼 쪽 약 1.2 px, 최소 `MinLineWidth`) | `line` | `Court.HalfWidth`, `Court.HalfLength`, `Court.ServiceLine` → `BroadcastCourt.Lines()` |
 | 4 | 선수 그림자 | 월드 위치, 크기는 캡슐 기준 | 지면 타원. 가로 반지름 = 캡슐 반폭 × `PlayerShadowWidthScale`, 세로 = 가로 × `PlayerShadowDepthScale` | `ball-shadow` | `BroadcastCamera.Player` |
 | 5 | 공 그림자 | 월드 위치, 크기는 화면 | 공 바로 아래 지면(y=0)의 타원 `BallShadowWidth` × `BallShadowHeight` px | `ball-shadow` | `BroadcastCamera.Ball` |
 | 6 | 네트 너머의 선수·공 | — | 아래 7~9와 같은 모양. 네트 평면(z=0)보다 멀면 네트보다 먼저 그린다 | — | 깊이 정렬 |
@@ -43,11 +46,11 @@
 | 9 | 공 | 월드 중심, 크기는 화면 | 지름 `BallDiameter` px, 테두리 `BallOutline` px | 채움 `ball`, 테두리 `ground` | `frames` 공 위치 |
 | 10 | 공 높이 보조선 | 월드 | 공과 그림자를 잇는 1 px 점선(70%). 공 높이가 `BallHeightGuideAbove`를 넘을 때만 | `ball` | `BroadcastCamera.Ball().HeightGuide` |
 | 11 | A/B 배지 | 화면 크기, 머리 위에 붙음 | 지름 `BadgeSize` px, 머리 위 `BadgeGap` px | Badge 컴포넌트(`player-a`/`player-b`, 글자 `on-selected`) | `BroadcastCamera.Player().Badge` |
-| 12 | HUD 판 | 화면 | 점수판 `Scoreboard`, 현재 전술 `CurrentTactic`, 직전 포인트 `LastPoint`, 조작 막대 `ControlBar` | 바탕 `hud-plate`, 글자 `line`/`line-muted`, 점수 `score-hud` | `BroadcastSpec.HudPlates` |
+| 12 | HUD 판 | 화면 | 점수판 `Scoreboard`(왼쪽 위), 현재 전술 `CurrentTactic`(오른쪽 위), 직전 포인트 `LastPoint`(점수판 아래 — 왼쪽 아래에 두면 옆으로 깊이 물러난 가까운 선수를 가렸다), 조작 막대 `ControlBar`(아래) | 바탕 `hud-plate`, 글자 `line`/`line-muted`, 점수 `score-hud` | `BroadcastSpec.HudPlates` |
 | 13 | 머리 띠 | 화면 | 코치 UI의 StepNav 그대로 | 기존 토큰 | 코치 UI |
 
 - 깊이: 2~5는 지면이라 늘 가장 뒤다. 6~10은 카메라 깊이(`ScreenPoint.Depth`)로 정렬하고, 네트는 z=0 평면의 깊이로 친다. 11~13은 장면 위에 늘 맨 앞이다.
-- HUD 판은 코트 단식 사다리꼴과 겹치지 않는다(검사). 장면 위에 글자를 바로 쓰지 않는다.
+- HUD 판은 코트 단식 사다리꼴과 겹치지 않고, 검사한 기록의 어느 프레임에서도 선수(그림자부터 배지까지)를 가리지 않는다(검사). 장면 위에 글자를 바로 쓰지 않는다.
 - 공만 크기를 키운다. 선수 캡슐은 실제 치수를 원근 그대로 그린다.
 
 ## 동작 상태
@@ -88,10 +91,10 @@ TENNISSIM_BROADCAST_REPLAY=/tmp/seed-42.json dotnet run --project tests/TennisSi
 |---|---|
 | Broadcast: court corners, lines and net stand inside the title-safe area | 단식 네 귀퉁이, 모든 라인 끝, 네트 윗줄, 기둥 밑이 안전 영역 안 |
 | Broadcast: the far baseline looks shorter and higher than the near one | 먼 베이스라인이 더 짧고 위에 있음, 베이스라인이 수평, 코트가 가운데 |
-| Broadcast: the numbers in the design system match the camera | 기준 위치 4개(±1 px), 19 m 선수의 발 그림자가 조작 막대 위, 배지가 안전 영역 안, 라인 두께 |
+| Broadcast: the numbers in the design system match the camera | 기준 위치 4개(±1 px), 20.5 m 선수의 발 그림자가 조작 막대 위, 배지가 안전 영역 안, 라인 두께 |
 | Broadcast: the ball keeps its recorded place, a fixed 11 px size and a shadow straight below | 공 중심 = 기록 투영, 그림자 = 바로 아래 지면 투영이고 화면에서 공 아래, 지름 11 px, 보조선은 0.3 m 초과일 때만, 실제 크기면 먼 쪽에서 3 px 미만 |
 | Broadcast: HUD plates sit inside the safe area and off the court corridor | 판 4개가 안전 영역 안에 있고 단식 사다리꼴과 겹치지 않음 |
-| Broadcast: recorded players and their badges stay in view; the ball is counted | 기록된 모든 프레임에서 선수 발과 배지가 뷰포트 안. 공이 뷰포트를 벗어나는 프레임은 1% 이하(seed 42 CLI: 5302 중 6) |
+| Broadcast: recorded players stay in view and are never covered by a HUD plate; the ball is counted | 기록된 모든 프레임에서 선수 발과 배지가 뷰포트 안, 어느 HUD 판도 선수를 가리지 않음, 가장 깊은 선수가 `FramedDepth` 안. 공이 뷰포트를 벗어나는 프레임은 1% 이하(seed 42 CLI: 5302 중 4) |
 | Motion: every player's spans are ordered and leave no gaps | 구간이 빈틈없이 이어짐 |
 | Motion: the contact frame is the BallHit time, and there is no strike without a BallHit | 모든 `BallHit` 시각에 타격 상태이고 접촉 시각이 같음. 타격 구간 수 = `BallHit` 수. CLI 기록과 코치 세션 기록 둘 다 |
 | Motion: PlayersRepositioned is a cut, never a walk | 모든 재배치 시각에 컷, 길이 0, 어떤 구간도 컷을 가로지르지 않음 |
@@ -99,6 +102,22 @@ TENNISSIM_BROADCAST_REPLAY=/tmp/seed-42.json dotnet run --project tests/TennisSi
 | Motion: the serve winds up from the reset, and the prepared stroke mostly matches the one played | 서브 타격 직전이 재배치에서 시작한 서브 구간. 랠리 타격마다 예정 스트로크가 있고 95% 이상 일치 |
 | Motion: a live renderer sees the same states as the finished replay | 사건을 앞에서부터 잘라 읽어도 그 시각까지의 상태가 같음 |
 | Motion: the broadcast layer leaves the record untouched | 투영과 분류 뒤에도 기록 JSON이 바이트 단위로 같음 |
+
+검사한 기록(모두 31/31): CLI seed 42, seed 42 코치 세션, big-server 대 retriever seed 3, 선수 유형 조합 7개(retriever·touch·slugger·big-server끼리 6개와 defender 대 baseline) × seed 3·42. 가장 깊은 선수는 19.9 m(big-server 대 retriever seed 3, defender 대 baseline seed 42), 공이 뷰포트 밖인 프레임은 경기마다 2~22개(0.3% 이하)였다.
+
+## 미리 보기 도구
+
+`tools/TennisSim.BroadcastPreview`는 경기 기록 한 장면을 이 사양대로 그려 SVG와 PNG로 쓴다. 기록은 읽기만 한다. 위치는 기록의 `frames`와 사건에서 보간하고(재배치는 건너뛰지 않고 붙잡는다), 투영은 `BroadcastCamera`, 머리 띠에 적는 동작 상태는 `BroadcastMotion.Classify(사건, upTo: 그 시각)`에서 온다. 색은 코치 USS의 토큰 변수와 디자인 시스템의 `ball-shadow`·`hud-plate`, 글꼴은 저장소의 Pretendard·JetBrains Mono 파일이다. 검사 실행(CoachChecks)에는 들어가지 않는다.
+
+```bash
+dotnet run --project tools/TennisSim.BroadcastPreview --no-build -- --replay <기록.json> --name seed42 --point 5 --hit 2
+dotnet run --project tools/TennisSim.BroadcastPreview --no-build -- --replay <기록.json> --name deep --deepest
+dotnet run --project tools/TennisSim.BroadcastPreview --no-build -- --replay <기록.json> --times 12.5,13.0
+```
+
+- 고르는 방법: `--times`(초 목록), `--point N --hit K`(포인트 N의 K번째 `BallHit` 전후, 기본 −0.3·−0.15·0·+0.15·+0.3 s, `--offsets`로 바꿈), `--deepest`(선수가 가장 멀리 물러난 프레임). 섞어 쓸 수 있다.
+- 결과: 기본 `artifacts/broadcast-preview/`(git 제외), `--out`으로 바꾼다. `/snap/bin/chromium`이 있으면 headless로 PNG를 만들고, 없으면 SVG만 남긴다. 새 패키지나 네트워크를 쓰지 않는다.
+- 머리 띠에는 기록 파일, 시각, 두 선수의 동작 상태를 적는다(미리 보기 전용). 조작 막대 자리는 비워 둔다. 노란 점선은 안전 영역 주석이며 `--no-guides`로 끈다.
 
 ## 마일스톤 3에서 Unity 쪽에 남는 일
 
@@ -112,7 +131,8 @@ TENNISSIM_BROADCAST_REPLAY=/tmp/seed-42.json dotnet run --project tests/TennisSi
 ## 한계
 
 - 2.5D는 조명과 사람 모양이 없다. 동작 상태는 3D 단계의 준비물이고 아직 그림으로 확인하지 않았다.
-- 카메라 틀은 seed 42(CLI 기본 선수)와 seed 42 코치 세션 두 기록으로 맞췄다. 다른 선수 조합이 더 멀리 물러나면 `FramedDepth`를 다시 봐야 한다. 검사가 그 경우 실패한다.
-- 공은 두 기록에서 프레임의 약 0.1~0.3%가 뷰포트 밖이다(높은 로브나 코트 밖 멀리 나간 공). 그대로 둔다.
+- 카메라 틀(`FramedDepth` 20.5 m)은 위 16개 기록으로 맞췄다. 가장 깊은 선수 19.9 m와의 여유는 0.6 m뿐이다. 런오프(반길이 21.5 m) 끝과도 1.6 m 차이다. 새 선수 유형이나 엔진 변경으로 더 물러나면 검사가 실패하고, 그때 틀을 다시 잡는다.
+- 미리 보기 도구의 보간은 계약의 샘플링 규칙을 스틸 한 장에 맞게 줄인 것이다(이웃 표본 사이 선형 보간, 사건 쪽은 `Before`, 재배치에서는 붙잡기). Unity 어댑터의 재생 구현과 같지 않을 수 있다.
+- 공은 검사한 기록에서 프레임의 0.3% 이하가 뷰포트 밖이다(높은 로브나 코트 밖 멀리 나간 공). 그대로 둔다.
 - 준비 시간(`PrepareLead`), 팔로스루, 놓침 여유는 디자인 값이고 실제 동작과 대조하지 않았다.
 - 배속에서 동작 길이를 줄이는 규칙은 분류기에 없다. 렌더러가 재생 속도에 맞춰 줄인다.

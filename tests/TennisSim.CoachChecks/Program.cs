@@ -230,6 +230,186 @@ Test("Review: opponent-coach changes with reasons, landing filters by the tactic
     var rf = CoachViews.Review(fixedOpp);
     Check(rf.OpponentChanges.Count == 0 && rf.NoOpponentChange == "Rook 코치는 전술을 바꾸지 않았습니다." && rf.LandingFilters.Count == 2);
 });
+
+// ---------- 2.5D broadcast view (design system broadcast.md, docs/BROADCAST_ASSETS.md) ----------
+// A real engine record: the CLI replay named by TENNISSIM_BROADCAST_REPLAY (e.g. `match --seed 42 --out ...`), else
+// a coached session played here. Both are plain Core records; the broadcast layer only reads them.
+MatchRecord BroadcastRecord(out string source)
+{
+    var path = Environment.GetEnvironmentVariable("TENNISSIM_BROADCAST_REPLAY");
+    if (!string.IsNullOrEmpty(path)) { source = path; return TennisSim.Cli.ReplayJson.Load(path); }
+    source = "coached session seed 42"; return Play(42, 0).Engine.Record;
+}
+var cam = BroadcastCamera.Default();
+bool InsideRect(ScreenRect r, ScreenPoint p) => p.InFront && r.Contains(p.X, p.Y);
+bool InPolygon(IReadOnlyList<ScreenPoint> poly, double x, double y)
+{
+    bool inside = false;
+    for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
+        if ((poly[i].Y > y) != (poly[j].Y > y) && x < (poly[j].X - poly[i].X) * (y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X) inside = !inside;
+    return inside;
+}
+
+Test("Broadcast: court corners, lines and net stand inside the title-safe area", () =>
+{
+    var safe = BroadcastSpec.SafeArea;
+    foreach (var c in BroadcastCourt.SinglesCorners) Check(InsideRect(safe, cam.Project(c)), "corner " + c.X + "," + c.Z);
+    foreach (var seg in BroadcastCourt.Lines()) Check(InsideRect(safe, cam.Project(seg.A)) && InsideRect(safe, cam.Project(seg.B)), "line end");
+    foreach (var t in BroadcastCourt.NetTape()) Check(InsideRect(safe, cam.Project(t)), "net tape at x=" + t.X);
+    foreach (double x in new[] { -BroadcastSpec.NetPostX, BroadcastSpec.NetPostX }) Check(InsideRect(safe, cam.Project(new Vec3(x, 0, 0))), "net post foot");
+});
+Test("Broadcast: the far baseline looks shorter and higher than the near one", () =>
+{
+    var c = BroadcastCourt.SinglesCorners.Select(cam.Project).ToArray();
+    double near = c[1].X - c[0].X, far = c[2].X - c[3].X;
+    Check(far < near && far > 0, $"near {near:0} px, far {far:0} px");
+    Check(c[2].Y < c[1].Y && Math.Abs(c[0].Y - c[1].Y) < 1e-9 && Math.Abs(c[2].Y - c[3].Y) < 1e-9, "baselines stay level on screen");
+    Check(Math.Abs(c[0].X + c[1].X - BroadcastSpec.ScreenWidth) < 1e-9, "the court is centred");
+    Console.WriteLine($"  near baseline {near:0.0} px at y {c[0].Y:0.0}, far {far:0.0} px at y {c[3].Y:0.0}");
+});
+Test("Broadcast: the numbers in the design system match the camera", () =>
+{
+    // broadcast.md: near baseline y≈527, far baseline y≈269, a player 19 m behind the net: near foot y≈693, far head y≈181.
+    Check(Math.Abs(cam.Project(new Vec3(0, 0, -Court.HalfLength)).Y - 527) < 1, "near baseline");
+    Check(Math.Abs(cam.Project(new Vec3(0, 0, Court.HalfLength)).Y - 269) < 1, "far baseline");
+    var nearFoot = cam.Player(new Vec3(0, 0, -BroadcastSpec.FramedDepth)); var farHead = cam.Player(new Vec3(0, 0, BroadcastSpec.FramedDepth));
+    Check(Math.Abs(nearFoot.Foot.Y - 693) < 1 && Math.Abs(farHead.Head.Y - 181) < 1, "framed depth");
+    Check(nearFoot.Foot.Y + nearFoot.ShadowRadiusY <= BroadcastSpec.ControlBar.Y - 4, "the deepest near player stays above the control bar");
+    Check(farHead.Badge.Y >= BroadcastSpec.SafeArea.Y, "the deepest far player's badge stays below the safe-area top");
+    double nearW = BroadcastSpec.LineWidth(cam.Project(new Vec3(0, 0, -Court.HalfLength)).Depth), farW = BroadcastSpec.LineWidth(cam.Project(new Vec3(0, 0, Court.HalfLength)).Depth);
+    Check(Math.Abs(nearW - 2.0) < .1 && Math.Abs(farW - 1.2) < .1, $"line width near {nearW:0.00}, far {farW:0.00}");
+});
+Test("Broadcast: the ball keeps its recorded place, a fixed 11 px size and a shadow straight below", () =>
+{
+    foreach (var b in new[] { new Vec3(1.6, 1.25, 3.2), new Vec3(-3, .05, -11), new Vec3(2, 4.5, 10), new Vec3(0, 0, 0) })
+    {
+        var m = cam.Ball(b); var ground = cam.Project(new Vec3(b.X, 0, b.Z)); var exact = cam.Project(b);
+        Check(m.Ball.X == exact.X && m.Ball.Y == exact.Y, "ball centre is the projected record");
+        Check(m.Shadow.X == ground.X && m.Shadow.Y == ground.Y, "shadow is the ground point below the ball");
+        Check(b.Y > 0 ? m.Shadow.Y > m.Ball.Y : m.Shadow.Y == m.Ball.Y, "shadow is under the ball on screen");
+        Check(m.Diameter == BroadcastSpec.BallDiameter, "fixed diameter");
+        Check(m.HeightGuide == (b.Y > BroadcastSpec.BallHeightGuideAbove), "height guide above 0.3 m");
+    }
+    double realFar = 2 * Court.BallRadius * cam.PixelsPerMetre(cam.Project(new Vec3(0, 1, Court.HalfLength)).Depth);
+    Check(realFar < 3, $"a true-size ball at the far baseline is {realFar:0.0} px, which is why it is drawn at 11 px");
+});
+Test("Broadcast: HUD plates sit inside the safe area and off the court corridor", () =>
+{
+    var court = BroadcastCourt.SinglesCorners.Select(cam.Project).ToList();
+    foreach (var plate in BroadcastSpec.HudPlates)
+    {
+        var safe = BroadcastSpec.SafeArea;
+        Check(safe.Contains(plate.X, plate.Y) && safe.Contains(plate.Right, plate.Bottom), "plate inside safe area");
+        for (double x = plate.X; x <= plate.Right; x += 4)
+            for (double y = plate.Y; y <= plate.Bottom; y += 4)
+                Check(!InPolygon(court, x, y), $"plate at {plate.X},{plate.Y} covers the court at {x},{y}");
+    }
+});
+Test("Broadcast: recorded players and their badges stay in view; the ball is counted", () =>
+{
+    var rec = BroadcastRecord(out var source); var view = BroadcastSpec.Viewport;
+    int ballOut = 0, samples = 0;
+    foreach (var f in rec.Frames)
+    {
+        foreach (var pl in f.Players)
+        {
+            var m = cam.Player(pl.Position);
+            Check(InsideRect(view, m.Foot) && view.Contains(m.Badge.X, m.Badge.Y) && view.Contains(m.Badge.Right, m.Badge.Bottom), $"player {pl.Id} at {pl.Position.X:0.0},{pl.Position.Z:0.0} ({source})");
+        }
+        samples++; if (!InsideRect(view, cam.Ball(f.Ball.Position).Ball)) ballOut++;
+    }
+    Console.WriteLine($"  {source}: {samples} frames, ball outside the viewport in {ballOut}");
+    Check(ballOut * 100 <= samples, "ball leaves the view in at most 1% of frames");
+});
+
+MotionTrack Motion(MatchRecord rec) => BroadcastMotion.Classify(rec.Events);
+int PlayerIndex(MatchEvent e) => Array.FindIndex(e.State.Players, p => p.Id == e.PlayerId);
+Test("Motion: every player's spans are ordered and leave no gaps", () =>
+{
+    var rec = BroadcastRecord(out _); var track = Motion(rec);
+    for (int p = 0; p < 2; p++)
+    {
+        var spans = track.Spans[p];
+        Check(spans.Count > 0 && spans[0].Start == rec.Events[0].Time);
+        for (int i = 0; i < spans.Count; i++)
+        {
+            Check(spans[i].Start <= spans[i].End, "start before end");
+            if (i > 0) Check(spans[i].Start == spans[i - 1].End, $"gap at {spans[i].Start}");
+        }
+    }
+});
+Test("Motion: the contact frame is the BallHit time, and there is no strike without a BallHit", () =>
+{
+    foreach (var rec in new[] { BroadcastRecord(out _), Play(3, 0).Engine.Record })
+    {
+        var track = Motion(rec); var hits = rec.Events.Where(e => e.Kind == "BallHit").ToList();
+        foreach (var h in hits)
+        {
+            var span = track.SpanAt(PlayerIndex(h), h.Time);
+            Check(span.State == MotionState.Strike && span.ContactTime == h.Time && span.ActionId == h.ActionId && span.Stroke == h.Stroke, $"hit at {h.Time}");
+        }
+        Check(track.Spans.Sum(s => s.Count(x => x.State == MotionState.Strike)) == hits.Count, "one strike per BallHit");
+    }
+});
+Test("Motion: PlayersRepositioned is a cut, never a walk", () =>
+{
+    var rec = BroadcastRecord(out _); var track = Motion(rec);
+    var resets = rec.Events.Where(e => e.Kind == "PlayersRepositioned").Select(e => e.Time).ToList();
+    Check(track.Cuts.SequenceEqual(resets), "a cut at every reset");
+    foreach (var t in resets)
+        for (int p = 0; p < 2; p++)
+        {
+            Check(track.Spans[p].Any(s => s.State == MotionState.Reposition && s.Start == t && s.End == t), "zero-length reposition");
+            Check(!track.Spans[p].Any(s => s.Start < t && s.End > t), "no motion runs across a cut");
+        }
+    Check(track.Spans.All(ps => ps.Where(s => s.State == MotionState.Reposition).All(s => s.Start == s.End)));
+});
+Test("Motion: an unreachable contact shows no strike; a missed one only reaches", () =>
+{
+    var rec = BroadcastRecord(out _); var track = Motion(rec); int unreachable = 0, lunges = 0;
+    foreach (var cp in rec.Events.Where(e => e.Kind == "ContactPrepared" && e.Reason == "UnreachableContact"))
+    {
+        unreachable++; int p = PlayerIndex(cp);
+        Check(!track.Spans[p].Any(s => s.State == MotionState.Strike && s.ActionId == cp.ActionId), "no strike for action " + cp.ActionId);
+        if (track.Spans[p].Any(s => s.State == MotionState.Miss && s.ActionId == cp.ActionId)) lunges++;
+    }
+    Check(rec.Events.Where(e => e.Kind == "BallHit").All(h => !track.Spans[PlayerIndex(h)].Any(s => s.State == MotionState.Miss && s.ActionId == h.ActionId)), "a ball that was struck never shows a miss first");
+    Console.WriteLine($"  unreachable contacts {unreachable}, of which reached-for before the point ended {lunges}");
+});
+Test("Motion: the serve winds up from the reset, and the prepared stroke mostly matches the one played", () =>
+{
+    var rec = BroadcastRecord(out _); var track = Motion(rec);
+    foreach (var h in rec.Events.Where(e => e.Kind == "BallHit" && e.Stroke == "Serve"))
+    {
+        int p = PlayerIndex(h); var spans = track.Spans[p]; int i = spans.FindIndex(s => s.State == MotionState.Strike && s.ContactTime == h.Time);
+        Check(i > 0 && spans[i - 1].State == MotionState.Serve && track.Cuts.Contains(spans[i - 1].Start), "serve span from a reset at " + h.Time);
+    }
+    var strikes = track.Spans.SelectMany(s => s).Where(s => s.State == MotionState.Strike && s.Stroke != "Serve").ToList();
+    var planned = strikes.Where(s => s.PlannedStroke != "").ToList();
+    int same = planned.Count(s => s.PlannedStroke == s.Stroke);
+    Console.WriteLine($"  prepared stroke matches the played one in {same}/{planned.Count} of {strikes.Count} rally strikes");
+    Check(planned.Count == strikes.Count && same * 100 >= planned.Count * 95, "engine v6 announces the stroke for every rally shot");
+});
+Test("Motion: a live renderer sees the same states as the finished replay", () =>
+{
+    var rec = BroadcastRecord(out _); var full = Motion(rec); var ev = rec.Events;
+    for (int k = 0; k < ev.Count; k += 37)
+    {
+        double cut = ev[k].Time;
+        var live = BroadcastMotion.Classify(ev.Where(e => e.Time <= cut).ToList(), cut);
+        foreach (double back in new[] { 0, .05, .2, .5, 1.5 })
+        {
+            double t = cut - back; if (t < ev[0].Time) continue;
+            for (int p = 0; p < 2; p++) Check(live.StateAt(p, t) == full.StateAt(p, t), $"player {p} at {t:0.000} (live up to {cut:0.000}): {live.StateAt(p, t)} vs {full.StateAt(p, t)}");
+        }
+    }
+});
+Test("Motion: the broadcast layer leaves the record untouched", () =>
+{
+    var rec = BroadcastRecord(out _); string before = TennisSim.Cli.ReplayJson.Serialize(rec);
+    Motion(rec); foreach (var f in rec.Frames) { cam.Ball(f.Ball.Position); foreach (var pl in f.Players) cam.Player(pl.Position); }
+    Check(TennisSim.Cli.ReplayJson.Serialize(rec) == before);
+});
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;
 

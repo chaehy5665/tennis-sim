@@ -21,10 +21,11 @@ namespace TennisSim.Core
         // same choice repeatedly reacts faster. Only the last PatternWindow choices of each kind count.
         private const int PatternWindow = 10, PatternMinimum = 4;
         private const double PatternFloor = .4, PatternReadBonus = .6;
-        // Serve reading also moves the receiver: before each serve the receiver steps toward the wide side by
-        // ServeLean times (Wide share - T share) of the server's recent serves. A server who keeps going wide finds the
-        // receiver waiting there and the T open; a mixed server keeps the receiver in the middle.
-        private const double ServeLean = 1.0;
+        // Serve reading also moves the receiver: before each serve the receiver stands ReceiverServeX from the centre
+        // line plus ServeLean times (Wide share - T share) of the server's recent serves, toward the wide side of this
+        // serve. A server who keeps going wide finds the receiver waiting there and the T open; a mixed server keeps
+        // the receiver in the middle. Public so that coaching statistics read the lean from the same numbers.
+        public const double ReceiverServeX = 1.5, ServeLean = 1.0;
         private readonly List<string>[] servePatterns = { new List<string>(), new List<string>() };
         private readonly List<string>[] rallyPatterns = { new List<string>(), new List<string>() };
         private double receiverReaction;
@@ -151,7 +152,7 @@ namespace TennisSim.Core
                 players[i].End = i == 0 ? score.EndA : -score.EndA;
                 double x = score.DeuceSide ? -players[i].End : players[i].End;
                 // For the receiver, +x is the wide side of this serve; see ServeLean.
-                double lateral = i == score.Server ? 1.1 : 1.5 + ServeLean * ServeLeaning(score.Server);
+                double lateral = i == score.Server ? 1.1 : ReceiverServeX + ServeLean * ServeLeaning(score.Server);
                 players[i].Position = new Vec3(x * lateral, 0, players[i].End * (i == score.Server ? 12.15 : 12.7));
                 players[i].Velocity = new Vec3(); players[i].Facing = new Vec3(0, 0, -players[i].End);
             }

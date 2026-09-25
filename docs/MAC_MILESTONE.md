@@ -14,7 +14,7 @@ Linux 우선 개발([PLAYTEST.md](PLAYTEST.md) "개발 흐름")에서는 Unity �
 | 상대 코치 AI 안정화 | `e195acc` | 새 이유 문장 3개 (CoachText) |
 | 2.5D 준비: 투영, 동작 상태, 사양 | `972db88`, `bc81d44` | Coach/App에 새 .cs 3개. 화면 변화 없음, 컴파일과 .meta만 |
 | 코치 UI 매치업을 `backhander` 프리셋으로 | 대기 (UI 세션) | CoachMatchup, 기록 바이트 동일해야 함 |
-| AI 자기 스카우팅 | 대기 (Debug 세션) | 이유 문장이 늘 수 있음 |
+| AI 스카우팅 출발점 | `29e2b77` | 새 이유 문장 2개 (CoachText) |
 | 서브 위치 신호 | 대기 (UI·Design 의견) | 서브 코스 패널 |
 
 ## 1. 준비와 자동 검증
@@ -52,6 +52,8 @@ scripts/validate-unity-viewer.sh all
    - HoldStyle: "… 선수가 방금 공격성을 바꿔, 한 구간 균형으로 지켜봅니다."
    - TryStyle: "균형으로 38%(13포인트)에 그쳐 공격을 한 구간 시험합니다." 같은 형식
    - MeasuredStyle: "시험해 보니 안전이 55%로 균형 38%보다 나아 안전으로 갑니다." 같은 형식
+   - SelfScouting, OpponentScouting: 기본 매치업(Ember 대 Rook)에서는 두 선수 모두 기울기가 없어 나오지 않는 것이
+     정상이다. 이때도 첫 체인지오버의 CounterSafe(6번)는 그대로 나와야 한다.
 
 ## 3. 손 플레이 테스트 (마일스톤 1과 같은 절차)
 

@@ -142,10 +142,34 @@ Test("PlayMode scenario: a Safe start makes the opponent coach change at the fir
     Check(banners > 0 && s.Engine.Record.Status == "Completed", "banners " + banners);
     Check(s.Engine.Record.InstructionHistory.All(i => i.Player == 1));
 });
-Test("Rook is the baseline preset with forehand and backhand swapped", () =>
+Test("Rook is the backhander preset: the baseline player with forehand and backhand swapped", () =>
 {
     var i = CoachMatchup.Input(9); var b = PlayerProfile.Preset("baseline", "B");
     Check(i.Seed == 9 && i.Players[1].Name == "Rook" && i.Players[1].BackhandPower == b.ForehandPower && i.Players[1].ForehandControl == b.BackhandControl);
+});
+Test("Using the backhander preset keeps coached sessions byte-identical to the hand-built Rook", () =>
+{
+    // The Rook CoachMatchup built by hand before the player archetypes existed.
+    MatchInput Legacy(uint seed)
+    {
+        var rook = PlayerProfile.Preset("baseline", "B"); rook.Name = "Rook";
+        (rook.ForehandPower, rook.BackhandPower) = (rook.BackhandPower, rook.ForehandPower);
+        (rook.ForehandControl, rook.BackhandControl) = (rook.BackhandControl, rook.ForehandControl);
+        return new MatchInput { Seed = seed, Players = new[] { PlayerProfile.Preset("baseline", "A"), rook } };
+    }
+    string Coached(MatchInput input)
+    {
+        var s = new CoachSession(input); s.Start(new Tactic { Target = TargetStyle.TargetBackhand }); int n = 0;
+        while (s.Phase != CoachPhase.Finished)
+        {
+            if (s.Phase == CoachPhase.Changeover) s.Resume(n++ % 2 == 0 ? new Tactic { Aggression = Aggression.Aggressive } : null);
+            else s.AdvanceToNextStop();
+        }
+        return TennisSim.Cli.ReplayJson.Serialize(s.Engine.Record);
+    }
+    Check(TennisSim.Cli.ReplayJson.Serialize(CoachMatchup.Input(3).Players[1]) == TennisSim.Cli.ReplayJson.Serialize(Legacy(3).Players[1]), "same profile, field for field");
+    foreach (uint seed in new uint[] { 3, 7, 42 })
+        Check(Coached(CoachMatchup.Input(seed)) == Coached(Legacy(seed)), "coached record bytes differ at seed " + seed);
 });
 Test("Opponent-coach style reasons read as sentences with their numbers", () =>
 {

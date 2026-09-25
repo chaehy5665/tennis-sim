@@ -12,6 +12,7 @@ Linux 우선 개발([PLAYTEST.md](PLAYTEST.md) "개발 흐름")에서는 Unity �
 | 엔진 v6: 서브 위치 읽기, 예정 스트로크 | `bac7ec1` | ReplayLoader가 v6 허용 |
 | 선수 유형 6개 | `b6a4824` | 없음 (Core 프리셋만) |
 | 상대 코치 AI 안정화 | `e195acc` | 새 이유 문장 3개 (CoachText) |
+| 2.5D 준비: 투영, 동작 상태, 사양 | `972db88`, `bc81d44` | Coach/App에 새 .cs 3개. 화면 변화 없음, 컴파일과 .meta만 |
 | 코치 UI 매치업을 `backhander` 프리셋으로 | 대기 (UI 세션) | CoachMatchup, 기록 바이트 동일해야 함 |
 | AI 자기 스카우팅 | 대기 (Debug 세션) | 이유 문장이 늘 수 있음 |
 | 서브 위치 신호 | 대기 (UI·Design 의견) | 서브 코스 패널 |
@@ -27,7 +28,7 @@ scripts/validate-unity-viewer.sh all
 ```
 
 - 컴파일 오류 0, EditMode와 PlayMode 모두 통과, font missing 0.
-- 새 `.meta`가 생기면 커밋 대상으로 보고한다(직접 커밋하지 않음).
+- 새 `.meta`가 생기면 커밋 대상으로 보고한다(직접 커밋하지 않음). `Coach/App/Broadcast*.cs` 3개의 `.meta`가 생길 것이다.
 
 ## 2. 화면 확인 (1280×800, 필요하면 2x)
 

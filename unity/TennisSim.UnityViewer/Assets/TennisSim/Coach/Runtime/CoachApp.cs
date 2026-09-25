@@ -612,7 +612,7 @@ namespace TennisSim.Coach
             page.Add(top);
 
             var timeline = Box("tsc-panel"); timeline.style.marginTop = 16; timeline.style.marginBottom = 16;
-            timeline.Add(Text("전술 구간별 흐름 · 카드 아래는 게임별 승자", "tsc-label", "tsc-gap-bottom"));
+            timeline.Add(Text("전술 구간별 흐름 · 카드 아래쪽은 게임별 승자", "tsc-label", "tsc-gap-bottom"));
             // Segment cards in rows built here, not flex-wrap (Yoga does not grow the parent for wrapped lines): n cards
             // per row from the width, all the same width, each row as tall as its tallest card. Empty slots in the last
             // row are invisible fillers. Rows are rebuilt only when n changes.

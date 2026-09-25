@@ -88,6 +88,11 @@ Test("Review view: segment points, game winners and landings agree with the reco
         rec.Events.Any(b => b.Kind == "BallBounced" && b.ActionId == e.ActionId && b.State.Ball.Bounces == 1)));
     Check(r.Outs > 0 && r.Outs < r.Landings.Count);
     Check(r.Summary[0].A == rec.Stats.Players[0].PointsWon.ToString());
+    // Row names match the changeover comparison table.
+    var labels = r.Summary.Select(x => x.Label).ToList();
+    Check(labels.Contains("서브 득점") && labels.Contains("타구 포핸드/백핸드") && !labels.Contains("서브 포인트 획득") && !labels.Contains("타수 포핸드/백핸드"), string.Join(",", labels));
+    var whole = SegmentStats.Compute(rec, 1, rec.FinalScore.PointsPlayed).Players[0];
+    Check(r.Summary.Single(x => x.Label == "타구 포핸드/백핸드").A == whole.Forehands + "/" + whole.Backhands, "strokes over the match");
 });
 Test("Match view follows the engine state", () =>
 {

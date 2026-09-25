@@ -218,18 +218,19 @@ namespace TennisSim.Coach
             };
         }
 
+        // The review's whole-match table. Row names follow the changeover comparison table ("서브 득점", "타구 포핸드/백핸드").
         static List<StatRow> Rows(SegmentStats s, SegmentStats m)
         {
             StatRow R(string label, Func<SegmentPlayerStats, string> f) => new StatRow { Label = label, A = f(s.Players[0]), B = f(s.Players[1]), MatchA = m == null ? null : f(m.Players[0]), MatchB = m == null ? null : f(m.Players[1]) };
             var rows = new List<StatRow>
             {
                 R("득점", p => p.PointsWon.ToString()),
-                R("서브 포인트 획득", p => CoachText.Ratio(p.ServePointsWon, p.ServePoints)),
+                R("서브 득점", p => CoachText.Ratio(p.ServePointsWon, p.ServePoints)),
                 R("첫 서브 성공", p => CoachText.Ratio(p.FirstServesIn, p.ServePoints)),
                 R("더블 폴트", p => p.DoubleFaults.ToString()),
                 R("위너", p => p.Winners.ToString()),
                 R("에러 포핸드/백핸드", p => p.ForehandErrors + "/" + p.BackhandErrors),
-                R("타수 포핸드/백핸드", p => p.Forehands + "/" + p.Backhands)
+                R("타구 포핸드/백핸드", p => p.Forehands + "/" + p.Backhands)
             };
             // Energy is a state at the end of the range, so the segment and the match show the same value.
             rows.Add(new StatRow { Label = "체력", A = Energy(s.Players[0]), B = Energy(s.Players[1]), MatchA = m == null ? null : CoachText.None, MatchB = m == null ? null : CoachText.None });

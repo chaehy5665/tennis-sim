@@ -13,9 +13,9 @@ Linux 우선 개발([PLAYTEST.md](PLAYTEST.md) "개발 흐름")에서는 Unity �
 | 선수 유형 6개 | `b6a4824` | 없음 (Core 프리셋만) |
 | 상대 코치 AI 안정화 | `e195acc` | 새 이유 문장 3개 (CoachText) |
 | 2.5D 준비: 투영, 동작 상태, 사양 | `972db88`, `bc81d44` | Coach/App에 새 .cs 3개. 화면 변화 없음, 컴파일과 .meta만 |
-| 코치 UI 매치업을 `backhander` 프리셋으로 | 대기 (UI 세션) | CoachMatchup, 기록 바이트 동일해야 함 |
+| 코치 UI 매치업을 `backhander` 프리셋으로 | `dcd0937` | CoachMatchup. 기록 바이트 동일(CoachChecks) |
 | AI 스카우팅 출발점 | `29e2b77` | 새 이유 문장 2개 (CoachText) |
-| 서브 위치 신호 | 대기 (UI·Design 의견) | 서브 코스 패널 |
+| 서브 위치 신호 | 대기 (UI 구현, Design 표기) | 서브 코스 패널 아래 한 줄 |
 
 ## 1. 준비와 자동 검증
 

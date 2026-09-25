@@ -30,6 +30,13 @@ namespace TennisSim.Core
         public ServeCourseStats WideServe { get; set; } = new ServeCourseStats();
         public ServeCourseStats BodyServe { get; set; } = new ServeCourseStats();
         public ServeCourseStats TServe { get; set; } = new ServeCourseStats();
+        // Where receivers stood against this player's serves: before each point's first serve the receiver steps toward
+        // the wide side of the serve by MatchEngine.ServeLean times (Wide share - T share) of this server's recent serves.
+        // Shift = |receiver x| - MatchEngine.ReceiverServeX, positive toward the wide side, negative toward the T; one
+        // sample per serve point.
+        public int ReceiverShiftPoints { get; set; }
+        public double ReceiverShiftTotal { get; set; }
+        public double MeanReceiverShift => ReceiverShiftPoints == 0 ? 0 : ReceiverShiftTotal / ReceiverShiftPoints;
         public ServeCourseStats? ServeCourse(string course) => course == "Wide" ? WideServe : course == "Body" ? BodyServe : course == "T" ? TServe : null;
     }
     // What happened to shots aimed at one side. Every shot ends exactly one way: Shots = Winners + Errors +
@@ -66,9 +73,17 @@ namespace TennisSim.Core
             int Index(string id) => Array.IndexOf(ids, id);
             MatchEvent? lastHit = null, firstServe = null; bool serveFault = false; int rallyTotal = 0, rallyHits = 0;
             var rally = new List<MatchEvent>();
+            int shiftPoint = 0; double? shift = null;
             foreach (var e in record.Events)
             {
                 if (e.Point < fromPoint || e.Point > toPoint) continue;
+                // The first serve preparation of a point comes before its PointStarted event.
+                if (e.Kind == "PlayersRepositioned" && e.Reason == "BetweenServePreparation" && e.Point != shiftPoint)
+                {
+                    shiftPoint = e.Point;
+                    var receiver = e.State.Players[1 - e.State.Score.Server];
+                    shift = Math.Abs(receiver.Position.X) - MatchEngine.ReceiverServeX;
+                }
                 if (e.Kind == "PointStarted") { lastHit = null; firstServe = null; serveFault = false; rallyHits = 0; rally.Clear(); }
                 else if (e.Kind == "ServeFault") serveFault = true;
                 else if (e.Kind == "BallHit")
@@ -101,6 +116,7 @@ namespace TennisSim.Core
                     }
                     // Legal serve plus rally hits, matching MatchStats.RallyLengths.
                     rallyTotal += e.Reason == "DoubleFault" ? 0 : rallyHits + 1;
+                    if (shift.HasValue && shiftPoint == e.Point) { server.ReceiverShiftPoints++; server.ReceiverShiftTotal += shift.Value; }
                     var course = firstServe == null ? null : server.ServeCourse(firstServe.Reason);
                     if (course != null) { course.Points++; if (!serveFault) course.FirstServesIn++; if (server == winner) course.Won++; }
                     // Each rally shot ends as a winner, an own error, or the opponent's next hit (a reply).

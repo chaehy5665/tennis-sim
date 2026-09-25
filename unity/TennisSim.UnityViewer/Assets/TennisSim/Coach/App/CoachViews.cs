@@ -23,6 +23,8 @@ namespace TennisSim.Coach
         public string Title; public string Sample; public bool SampleTag;
         // A body line under the table for a value that is not per player (average rally), or null.
         public string Note;
+        // Note in line-muted: always for a context line (average rally), for a decision line only below its sample.
+        public bool NoteMuted;
         public string[] Columns = new string[0];
         public List<SplitRow> Split = new List<SplitRow>();
         public List<EvidenceRow> Rows = new List<EvidenceRow>();
@@ -236,7 +238,7 @@ namespace TennisSim.Coach
             var prev = prevIndex >= 0 ? SegmentStats.Compute(session.Engine.Record, session.Segments[prevIndex].FromPoint, session.Segments[prevIndex].ToPoint) : null;
             view.HasPrevious = prev != null;
             view.Direction = DirectionPanel(s, prev);
-            view.Serve = ServePanel(s);
+            view.Serve = ServePanel(s, prev);
             view.Compare = ComparePanel(s, prev);
             return view;
         }
@@ -282,7 +284,7 @@ namespace TennisSim.Coach
         }
 
         // Serve course: my serve points by the first serve's course. Ratios as k/n, never %; an unused course stays as "—".
-        public static EvidencePanel ServePanel(SegmentStats now)
+        public static EvidencePanel ServePanel(SegmentStats now, SegmentStats prev = null)
         {
             var me = now.Players[0];
             var panel = new EvidencePanel { Title = "서브 코스", Sample = "내 서브 " + me.ServePoints + "포인트", SampleTag = me.ServePoints < MinPoints, Columns = new[] { "서브", "첫 서브 성공", "서브 포인트 획득" } };
@@ -294,7 +296,29 @@ namespace TennisSim.Coach
             panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Wide), me.WideServe));
             panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Body), me.BodyServe));
             panel.Rows.Add(Course(CoachText.Serve(ServeDirection.T), me.TServe));
+            // Whether the opponent is reading my serve: where the receiver stood against it (design system changeover.md
+            // "2. 서브 코스 패널"). A decision line, so line colour, muted below 6 of my serve points.
+            panel.Note = ReturnPosition(now, prev);
+            panel.NoteMuted = me.ReceiverShiftPoints < MinPoints;
             return panel;
+        }
+
+        // "상대 리턴 위치 · 와이드 쪽 0.8 m (내 서브 7포인트)", or "직전 … → 이번 …" after the first changeover. The side is
+        // named like the chips, metres to one decimal, and a mean under 0.1 m reads as "가운데".
+        public static string ReturnPosition(SegmentStats now, SegmentStats prev)
+        {
+            const string Head = "상대 리턴 위치 · ";
+            var me = now.Players[0];
+            if (me.ReceiverShiftPoints == 0) return Head + CoachText.None;
+            string Side(SegmentPlayerStats p)
+            {
+                if (p.ReceiverShiftPoints == 0) return CoachText.None;
+                double m = p.MeanReceiverShift;
+                if (Math.Abs(m) < .1) return "가운데";
+                return (m > 0 ? CoachText.Serve(ServeDirection.Wide) : CoachText.Serve(ServeDirection.T)) + " 쪽 " + CoachText.Fixed(Math.Abs(m), 1) + " m";
+            }
+            string where = prev == null ? Side(me) : "직전 " + Side(prev.Players[0]) + " → 이번 " + Side(me);
+            return Head + where + " (내 서브 " + me.ReceiverShiftPoints + "포인트)";
         }
 
         // Aggression: this segment beside the previous one for both players (A previous, A now, B previous, B now), or
@@ -319,6 +343,7 @@ namespace TennisSim.Coach
             // Average rally belongs to the segment, not to a player: one line under the table, not two equal cells.
             string Rally(SegmentStats x) => CoachText.Fixed(x.MeanRallyLength, 1) + "구";
             panel.Note = prev != null ? "평균 랠리 · 직전 " + Rally(prev) + " → 이번 " + Rally(now) : "평균 랠리 · 이번 " + Rally(now);
+            panel.NoteMuted = true;
             return panel;
         }
 

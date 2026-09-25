@@ -446,6 +446,46 @@ Test("Aim and serve-course segment stats: every shot ends once, segments add up 
         Check(whole.Players[0].WideServe.Points > whole.Players[0].BodyServe.Points + whole.Players[0].TServe.Points, "Wide tactic serves mostly wide");
     }
 });
+Test("Receiver shift in segment stats equals ServeLean x (Wide share - T share) of the server's recent serves", () =>
+{
+    foreach (uint seed in new uint[] { 3, 42 })
+    {
+        var input = new MatchInput { Seed = seed, Tactics = new[] { new Tactic { Serve = ServeDirection.Wide }, new Tactic { Serve = ServeDirection.T } } };
+        var r = Run(seed, input: input); int n = r.FinalScore.PointsPlayed;
+        // Recompute from the serve history: window 10, at least 4 serves (MatchEngine.PatternWindow/PatternMinimum),
+        // every serve launch counts, including faults and lets.
+        var history = new[] { new List<string>(), new List<string>() };
+        var expected = new[] { new List<double>(), new List<double>() };
+        int seen = 0;
+        foreach (var e in r.Events)
+        {
+            if (e.Kind == "PlayersRepositioned" && e.Reason == "BetweenServePreparation" && e.Point != seen)
+            {
+                seen = e.Point; int server = e.State.Score.Server; var h = history[server];
+                double lean = h.Count < 4 ? 0 : MatchEngine.ServeLean * (h.Count(x => x == "Wide") - h.Count(x => x == "T")) / (double)h.Count;
+                double recorded = Math.Abs(e.State.Players[1 - server].Position.X) - MatchEngine.ReceiverServeX;
+                Check(Math.Abs(recorded - lean) < 1e-9, $"point {e.Point}: recorded {recorded} vs history {lean}");
+                expected[server].Add(lean);
+            }
+            else if (e.Kind == "BallHit" && e.ShotKind == "Serve")
+            {
+                var h = history[e.PlayerId == r.Stats.Players[0].PlayerId ? 0 : 1];
+                h.Add(e.Reason); if (h.Count > 10) h.RemoveAt(0);
+            }
+        }
+        var whole = SegmentStats.Compute(r, 1, n); var a = SegmentStats.Compute(r, 1, n / 2); var b = SegmentStats.Compute(r, n / 2 + 1, n);
+        for (int i = 0; i < 2; i++)
+        {
+            var p = whole.Players[i];
+            Check(p.ReceiverShiftPoints == p.ServePoints && p.ReceiverShiftPoints == expected[i].Count, "one sample per serve point");
+            Check(Math.Abs(p.ReceiverShiftTotal - expected[i].Sum()) < 1e-9, "total matches the history");
+            Check(a.Players[i].ReceiverShiftPoints + b.Players[i].ReceiverShiftPoints == p.ReceiverShiftPoints && Math.Abs(a.Players[i].ReceiverShiftTotal + b.Players[i].ReceiverShiftTotal - p.ReceiverShiftTotal) < 1e-9, "segments add up");
+        }
+        // A serves mostly wide, B mostly to the T: receivers lean wide against A and toward the T against B. The mean
+        // is diluted by the first points of each server (fewer than 4 serves, no lean) and the odd off-course serve.
+        Check(whole.Players[0].MeanReceiverShift > .3 && whole.Players[1].MeanReceiverShift < -.3, $"{whole.Players[0].MeanReceiverShift} / {whole.Players[1].MeanReceiverShift}");
+    }
+});
 Test("Opponent coach: reads scouting and style, consumes no randomness, re-simulates exactly", () =>
 {
     MatchRecord Coached(uint seed, PlayerProfile a, Tactic tacticA)

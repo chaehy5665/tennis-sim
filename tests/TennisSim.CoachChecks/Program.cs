@@ -445,6 +445,25 @@ Test("Motion: the broadcast layer leaves the record untouched", () =>
     Motion(rec); foreach (var f in rec.Frames) { cam.Ball(f.Ball.Position); foreach (var pl in f.Players) cam.Player(pl.Position); }
     Check(TennisSim.Cli.ReplayJson.Serialize(rec) == before);
 });
+Test("Serve course: opponent return position line in the design system's wording", () =>
+{
+    SegmentStats Seg(int points, double total) => new SegmentStats { Points = points, Players = new[] { new SegmentPlayerStats { ServePoints = points, ReceiverShiftPoints = points, ReceiverShiftTotal = total }, new SegmentPlayerStats() } };
+    Check(CoachViews.ReturnPosition(Seg(7, 5.6), null) == "상대 리턴 위치 · 와이드 쪽 0.8 m (내 서브 7포인트)");
+    Check(CoachViews.ReturnPosition(Seg(7, 5.6), Seg(6, .3)) == "상대 리턴 위치 · 직전 가운데 → 이번 와이드 쪽 0.8 m (내 서브 7포인트)");
+    Check(CoachViews.ReturnPosition(Seg(5, -1.5), Seg(0, 0)) == "상대 리턴 위치 · 직전 — → 이번 T 쪽 0.3 m (내 서브 5포인트)");
+    Check(CoachViews.ReturnPosition(Seg(0, 0), Seg(6, 3)) == "상대 리턴 위치 · —", "no serve of mine this segment");
+    Check(CoachViews.ServePanel(Seg(5, 1)).NoteMuted && !CoachViews.ServePanel(Seg(6, 1)).NoteMuted, "muted below 6 serve points");
+    // In a real coached match the line follows the recorded receiver positions.
+    var views = new List<ChangeoverView>(); var s = Play(3, 0, views);
+    for (int i = 0; i < views.Count; i++)
+    {
+        var seg = s.Segments[i]; var now = SegmentStats.Compute(s.Engine.Record, seg.FromPoint, seg.ToPoint);
+        var prev = i > 0 ? SegmentStats.Compute(s.Engine.Record, s.Segments[i - 1].FromPoint, s.Segments[i - 1].ToPoint) : null;
+        Check(views[i].Serve.Note == CoachViews.ReturnPosition(now, prev) && views[i].Serve.Note.StartsWith("상대 리턴 위치 · "), views[i].Serve.Note);
+        Check(views[i].Compare.NoteMuted, "average rally stays muted");
+    }
+    Console.WriteLine("  sample: " + views[^1].Serve.Note);
+});
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;
 

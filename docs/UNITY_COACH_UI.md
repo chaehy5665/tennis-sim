@@ -285,8 +285,9 @@ UnityEngine/UIElements 스텁(`UnityStubs.cs`)에 대고 컴파일한다. 솔루
 디자인 시스템 v37/v38 changeover.md "표본 크기", "2. 서브 코스 패널", "3. 공격성 · 구간 비교 표", "버튼 상태" 규칙이다.
 Mac에서 볼 항목은 [MAC_MILESTONE.md](MAC_MILESTONE.md) "마일스톤 3 확인 항목"에 있다.
 
-- 뷰 모델(`CoachViews`): 흐림은 값에만 준다. 패널이 기준 미만이면 `EvidencePanel.MuteAll()`로 행, 경기 누적 칸,
-  SplitBar 글자, 아래 줄을 모두 흐리고, 아니면 행이나 묶음 단위로만 흐린다. Runtime은 플래그대로 그릴 뿐 판단하지 않는다.
+- 뷰 모델(`CoachViews`): 흐림은 값에만 준다. 패널이 기준 미만이면 `EvidencePanel.MuteAll()`로 그 표본(이번 구간)의
+  값, SplitBar 글자, 아래 줄을 모두 흐리고, 아니면 행이나 묶음 단위로만 흐린다. 경기 누적 묶음은 다른 표본이라 태그와
+  상관없이 누적 6포인트 기준만 따른다(디자인 시스템 v39). Runtime은 플래그대로 그릴 뿐 판단하지 않는다.
   아래 줄은 `Notes`(줄마다 `Muted`)로 바뀌었다. 표 머리글 묶음은 `Groups`, 72px 칸은 `Compact`, 두 줄 항목 이름은
   `EvidenceRow.Note`다.
 - 서브 코스: 이번 구간과 경기 누적 두 묶음, 각 "첫 서브"(들어간 첫 서브/서브)와 "득점"(딴 포인트/서브). 분모가 서브

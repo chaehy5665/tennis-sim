@@ -243,7 +243,7 @@ Test("Changeover evidence: panels follow the segment stats, previous columns app
         Check(v.Compare.Notes.All(x => x.Muted), "context lines under the comparison are muted");
         // One muting rule: a tagged panel mutes every value; an untagged panel mutes only rows below their sample.
         foreach (var panel in new[] { v.Direction, v.Serve, v.Compare })
-            if (panel.SampleTag) Check(panel.Rows.All(r => r.Muted && (r.MatchValues == null || r.MatchMuted)) && panel.Split.All(x => x.Muted) && panel.Notes.All(x => x.Muted), panel.Title + " tagged: all values muted");
+            if (panel.SampleTag) Check(panel.Rows.All(r => r.Muted) && panel.Split.All(x => x.Muted) && panel.Notes.All(x => x.Muted), panel.Title + " tagged: all values of its sample muted");
         if (!v.Compare.SampleTag) Check(v.Compare.Rows.All(r => !r.Muted), "comparison values stay in line colour above the sample");
     }
 });
@@ -497,13 +497,26 @@ Test("Serve course rows carry the match so far per course beside this segment", 
             var c = courses[k]; var row = p.Rows[k];
             string Ratio(int a, int n) => n == 0 ? "—" : a + "/" + n;
             Check(row.MatchValues.SequenceEqual(new[] { Ratio(c.FirstServesIn, c.Points), Ratio(c.Won, c.Points) }), row.Label + " match values");
-            Check(row.MatchMuted == (p.SampleTag || c.Points > 0 && c.Points < CoachViews.MinPoints), row.Label + " match muted");
+            // The match group follows only its own sample, even when the segment panel is tagged (design system v39).
+            Check(row.MatchMuted == (c.Points > 0 && c.Points < CoachViews.MinPoints), row.Label + " match muted");
         }
         // The match column covers this segment: its serve points are at least the segment's.
         int segPoints = s.Engine.Record == null ? 0 : SegmentStats.Compute(s.Engine.Record, seg.FromPoint, seg.ToPoint).Players[0].ServePoints;
         Check(match.WideServe.Points + match.BodyServe.Points + match.TServe.Points >= segPoints);
     }
     Check(CoachViews.ServePanel(SegmentStats.Compute(s.Engine.Record, 1, 10)).MatchColumns.Length == 0, "no match columns without match stats");
+});
+Test("A tagged serve panel mutes the segment group but not a match group with its own sample", () =>
+{
+    SegmentStats Serves(int wide, int t) => new SegmentStats { Points = wide + t, Players = new[] { new SegmentPlayerStats
+    {
+        ServePoints = wide + t, WideServe = new ServeCourseStats { Points = wide, FirstServesIn = wide, Won = wide / 2 }, TServe = new ServeCourseStats { Points = t, FirstServesIn = t, Won = t }
+    }, new SegmentPlayerStats() } };
+    var p = CoachViews.ServePanel(Serves(3, 1), Serves(4, 2), Serves(10, 3));
+    Check(p.SampleTag && p.Rows.All(r => r.Muted), "segment of 4 serve points: tagged, segment values muted");
+    Check(!p.Rows[0].MatchMuted && p.Rows[0].MatchValues[0] == "10/10", "wide: 10 match points, not muted by the segment tag");
+    Check(p.Rows[2].MatchMuted, "T: 3 match points, muted by its own sample");
+    Check(!p.Rows[1].MatchMuted && p.Rows[1].MatchValues[0] == "—", "body: unused, a dash, not muted");
 });
 Test("Chip descriptions: one source for pre-match and changeover, serve lean named for wide and T", () =>
 {

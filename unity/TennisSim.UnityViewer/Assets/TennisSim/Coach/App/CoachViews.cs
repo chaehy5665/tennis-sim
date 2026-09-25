@@ -19,7 +19,8 @@ namespace TennisSim.Coach
     // A SplitRow is one line of the SplitBar: the opponent's backhand share. MatchValues (optional) follow
     // MatchColumns: the same measure over the match so far, beside this segment's Values.
     // Muting is one rule (changeover.md "표본 크기"): only values are muted, never labels, headers, titles or badges.
-    // A panel below its threshold gets the SampleTag and every value muted; a row or group below mutes just its values.
+    // A panel below its threshold gets the SampleTag and every value from the tagged sample (this segment) muted; a row
+    // or group below mutes just its values. Another sample's group (match so far) follows only its own threshold.
     public sealed class EvidenceRow { public string Label; public string Note; public string[] Values; public bool Muted; public string[] MatchValues; public bool MatchMuted; }
     public sealed class SplitRow { public string Label; public float Backhand; public string LeftText; public string RightText; public bool Muted; }
     // A body line under the table: a value that is not per player (average rally) or a signal (return position).
@@ -37,10 +38,11 @@ namespace TennisSim.Coach
         public List<SplitRow> Split = new List<SplitRow>();
         public List<EvidenceRow> Rows = new List<EvidenceRow>();
 
-        // The panel is below its threshold: every value, split line and note is muted.
+        // The panel is below its threshold: every value from its sample, split line and note is muted. MatchMuted is
+        // left alone: when the segment is small, the match so far is what the coach leans on (design system v39).
         public EvidencePanel MuteAll()
         {
-            foreach (var r in Rows) { r.Muted = true; r.MatchMuted = true; }
+            foreach (var r in Rows) r.Muted = true;
             foreach (var s in Split) s.Muted = true;
             foreach (var n in Notes) n.Muted = true;
             return this;

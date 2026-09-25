@@ -31,6 +31,9 @@ namespace TennisSim.Coach.Tests
             yield return null;
             Assert.That(app.Session.Phase, Is.EqualTo(CoachPhase.Changeover));
             Assert.That(app.Root.Q(className: "tsc-changeover"), Is.Not.Null);
+            Assert.That(app.Root.Q(className: "tsc-inset--lines-2"), Is.Not.Null, "choice description box");
+            Assert.That(app.Root.Q(className: "tsc-inset--lines-3"), Is.Not.Null, "change summary box");
+            Assert.That(app.Root.Q(className: "tsc-table-group"), Is.Not.Null, "serve course group header");
 
             Assert.That(app.Root.Q(className: "tsc-banner"), Is.Not.Null, "opponent coach banner at the first changeover");
             int banners = 0;

@@ -238,7 +238,16 @@ namespace TennisSim.Coach
             return panel;
         }
 
-        VisualElement Chips(List<TacticGroup> groups, Func<Tactic> get, Action<Tactic> set, Tactic current, bool descriptions)
+        // Which chip the changeover's description box explains: the hovered chip, else the focused one, else the last
+        // clicked one. Chips are rebuilt on every click, so hover and focus are cleared with them; the click remains.
+        sealed class ChoiceFocus
+        {
+            public TacticOption Hovered, Focused, Clicked;
+            public Action Changed;
+            public TacticOption Shown => Hovered ?? Focused ?? Clicked;
+        }
+
+        VisualElement Chips(List<TacticGroup> groups, Func<Tactic> get, Action<Tactic> set, Tactic current, bool descriptions, ChoiceFocus focus = null)
         {
             var box = Box();
             foreach (var g in groups)
@@ -262,7 +271,18 @@ namespace TennisSim.Coach
                     chip.Add(Text(o.Label, "tsc-label"));
                     if (descriptions) chip.Add(Text(o.Description, "tsc-body"));
                     else if (current != null && CoachViews.IsSelected(current, o)) chip.Add(Text("현재", "tsc-body"));
-                    chip.clicked += () => set(CoachViews.With(get(), option));
+                    if (focus != null)
+                    {
+                        chip.RegisterCallback<PointerEnterEvent>(_ => { focus.Hovered = option; focus.Changed(); });
+                        chip.RegisterCallback<PointerLeaveEvent>(_ => { if (focus.Hovered == option) { focus.Hovered = null; focus.Changed(); } });
+                        chip.RegisterCallback<FocusInEvent>(_ => { focus.Focused = option; focus.Changed(); });
+                        chip.RegisterCallback<FocusOutEvent>(_ => { if (focus.Focused == option) { focus.Focused = null; focus.Changed(); } });
+                    }
+                    chip.clicked += () =>
+                    {
+                        if (focus != null) { focus.Clicked = option; focus.Hovered = focus.Focused = null; }
+                        set(CoachViews.With(get(), option));
+                    };
                     row.Add(chip);
                 }
                 group.Add(row);
@@ -419,38 +439,59 @@ namespace TennisSim.Coach
             var compare = EvidenceView(v.Compare, v.Names); compare.style.marginTop = 16;
             main.Add(compare);
 
+            // Decision column (changeover.md "버튼 상태"): chips, the choice description (2 lines) and the change summary
+            // (3 lines). Both boxes have a fixed height, so clicking a chip never moves the buttons.
             var side = Box("tsc-panel"); side.style.width = 360;
             side.Add(Text("내 전술 변경", "tsc-title"));
             side.Add(Text("다음 포인트부터 적용됩니다. " + v.NextChangeover, "tsc-body", "tsc-muted", "tsc-gap-bottom"));
             var chips = Box();
-            var summary = Text("", "tsc-body");
+            var describe = Box("tsc-inset", "tsc-inset--compact", "tsc-inset--lines-2"); describe.style.marginTop = 8;
+            var summary = Box("tsc-inset", "tsc-inset--compact", "tsc-inset--lines-3"); summary.style.marginTop = 8; summary.style.marginBottom = 16;
             var buttons = Box();
+            var focus = new ChoiceFocus();
+            // The chip name beside its description; the description wraps in its own column (at most two lines, measured
+            // with Pretendard for every option at 310px).
+            void Describe()
+            {
+                describe.Clear();
+                var o = focus.Shown;
+                if (o == null) { describe.Add(Text(CoachViews.ChoiceHint, "tsc-body", "tsc-muted")); return; }
+                var name = Text(o.Label, "tsc-label"); name.style.marginRight = 8; name.style.marginTop = 3; name.style.flexShrink = 0;
+                var text = Text(o.Description, "tsc-body"); text.style.flexGrow = 1; text.style.flexShrink = 1;
+                var line = Box("tsc-row"); line.style.alignItems = Align.FlexStart;
+                line.Add(name); line.Add(text);
+                describe.Add(line);
+            }
+            focus.Changed = Describe;
             // Unchanged: one primary "그대로 계속". Changed: secondary "변경 취소" (back to the current tactic) and
             // primary "적용하고 계속". The primary always continues with the chips as they are.
             void Redraw()
             {
                 chips.Clear();
-                chips.Add(Chips(v.Groups, () => pending, t => { pending = t; Redraw(); }, v.CurrentA, false));
-                summary.text = Display(CoachViews.ChangeSummary(v.CurrentA, pending), false);
+                chips.Add(Chips(v.Groups, () => pending, t => { pending = t; Redraw(); }, v.CurrentA, false, focus));
+                Describe();
+                summary.Clear();
+                foreach (var line in CoachViews.ChangeSummary(v.CurrentA, pending)) summary.Add(Text(line, "tsc-body"));
                 buttons.Clear();
                 buttons.Add(CoachSession.Same(pending, v.CurrentA)
                     ? ButtonRow(MakeButton("그대로 계속", () => Resume(null), true))
-                    : ButtonRow(MakeButton("변경 취소", () => { pending = v.CurrentA.Copy(); Redraw(); }, false), MakeButton("적용하고 계속", () => Resume(pending), true)));
+                    : ButtonRow(MakeButton("변경 취소", () => { pending = v.CurrentA.Copy(); focus.Clicked = null; Redraw(); }, false), MakeButton("적용하고 계속", () => Resume(pending), true)));
             }
             Redraw();
             side.Add(chips);
-            var summaryBox = Box("tsc-inset", "tsc-inset--compact"); summaryBox.style.marginTop = 8; summaryBox.style.marginBottom = 16;
-            summaryBox.Add(summary);
-            side.Add(summaryBox);
+            side.Add(describe);
+            side.Add(summary);
             side.Add(buttons);
             columns.Add(main); columns.Add(side);
             page.Add(columns);
         }
 
         // One evidence panel: title (same name as the chip group), sample size, "참고용" SampleTag when the whole panel
-        // is below its threshold, SplitBar lines, then a StatTable whose muted rows are below their own threshold.
+        // is below its threshold, SplitBar lines, then a StatTable and the note lines. Only values are ever muted; the
+        // view model decides which (EvidencePanel.MuteAll for a tagged panel, Muted/MatchMuted for a row or group).
         // With names, the table is the segment comparison: a Badge per player over its "직전"/"이번" columns, and the
-        // "직전" values in line-muted.
+        // "직전" values in line-muted. With Groups, a group row ("이번 구간" / "경기 누적") spans each group's cells,
+        // 16px apart.
         VisualElement EvidenceView(EvidencePanel p, string[] names = null)
         {
             var panel = Box("tsc-panel");
@@ -472,29 +513,68 @@ namespace TennisSim.Coach
                 var line = Row(name, split); line.style.marginBottom = 8;
                 panel.Add(line);
             }
+            int cellWidth = p.Compact ? 72 : 80;
+            Label Cell(string text, params string[] classes)
+            {
+                var cell = Text(text, classes);
+                cell.AddToClassList("tsc-cell");
+                if (p.Compact) cell.AddToClassList("tsc-cell--compact");
+                return cell;
+            }
+            // The first cell after the segment's columns starts the match group, 16px (space-3) further right.
+            void Gap(VisualElement cell) => cell.style.marginLeft = 16;
             int perPlayer = names == null ? 0 : p.Columns.Length / 2;
             if (names != null)
             {
                 var badges = Row(Text("", "tsc-cell", "tsc-cell--label"));
-                for (int i = 0; i < 2; i++) { var cell = Row(Badge(i), Text(names[i], "tsc-label")); cell.style.width = 80 * perPlayer; cell.style.justifyContent = Justify.FlexEnd; badges.Add(cell); }
+                for (int i = 0; i < 2; i++) { var cell = Row(Badge(i), Text(names[i], "tsc-label")); cell.style.width = cellWidth * perPlayer; cell.style.justifyContent = Justify.FlexEnd; badges.Add(cell); }
                 panel.Add(badges);
             }
+            if (p.Groups.Length > 0)
+            {
+                var groups = Box("tsc-table-group");
+                groups.Add(Text("", "tsc-cell", "tsc-cell--label"));
+                for (int g = 0; g < p.Groups.Length; g++)
+                {
+                    var cell = Text(p.Groups[g], "tsc-label");
+                    cell.style.width = cellWidth * (g == 0 ? p.Columns.Length : p.MatchColumns.Length);
+                    cell.style.unityTextAlign = TextAnchor.MiddleRight;
+                    if (g > 0) Gap(cell);
+                    groups.Add(cell);
+                }
+                panel.Add(groups);
+            }
             var columns = Row(Text("", "tsc-cell", "tsc-cell--label"));
-            foreach (var c in p.Columns) columns.Add(Text(c, "tsc-label", "tsc-cell"));
+            foreach (var c in p.Columns) columns.Add(Cell(c, "tsc-label"));
+            for (int i = 0; i < p.MatchColumns.Length; i++) { var cell = Cell(p.MatchColumns[i], "tsc-label"); if (i == 0) Gap(cell); columns.Add(cell); }
             panel.Add(columns);
             foreach (var r in p.Rows)
             {
                 var row = Box("tsc-table-row");
-                row.Add(Text(r.Label, "tsc-body", "tsc-cell", "tsc-cell--label"));
+                if (r.Note == null) row.Add(Text(r.Label, "tsc-body", "tsc-cell", "tsc-cell--label"));
+                else
+                {
+                    // A two-line item name: the name, then what it holds in 12px line-muted.
+                    var item = Box("tsc-cell--label"); item.style.flexGrow = 1;
+                    item.Add(Text(r.Label, "tsc-body"));
+                    item.Add(Text(r.Note, "tsc-cell__note"));
+                    row.Add(item);
+                }
                 for (int i = 0; i < r.Values.Length; i++)
                 {
                     bool previous = perPlayer == 2 && i % 2 == 0;
-                    row.Add(Number(r.Values[i], "tsc-stat")); row[row.childCount - 1].AddToClassList("tsc-cell");
-                    if (r.Muted || previous) row[row.childCount - 1].AddToClassList("tsc-muted");
+                    row.Add(Cell(r.Values[i], "tsc-stat", r.Muted || previous ? "tsc-muted" : "tsc-plain"));
                 }
+                if (r.MatchValues != null)
+                    for (int i = 0; i < r.MatchValues.Length; i++) { var cell = Cell(r.MatchValues[i], "tsc-stat", r.MatchMuted ? "tsc-muted" : "tsc-plain"); if (i == 0) Gap(cell); row.Add(cell); }
                 panel.Add(row);
             }
-            if (p.Note != null) { var note = p.NoteMuted ? Text(p.Note, "tsc-body", "tsc-muted") : Text(p.Note, "tsc-body"); note.style.marginTop = 8; panel.Add(note); }
+            for (int i = 0; i < p.Notes.Count; i++)
+            {
+                var note = Text(p.Notes[i].Text, "tsc-body", p.Notes[i].Muted ? "tsc-muted" : "tsc-plain");
+                if (i == 0) note.style.marginTop = 8;
+                panel.Add(note);
+            }
             return panel;
         }
 

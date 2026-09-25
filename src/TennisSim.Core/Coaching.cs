@@ -21,6 +21,9 @@ namespace TennisSim.Core
         public int Backhands { get; set; }
         // Energy in [.15,1] after the last point of the range; -1 when the range holds no completed point.
         public double EnergyAtEnd { get; set; } = -1;
+        // Lowest energy anywhere in the range (recorded frames and event states); -1 when the range holds neither.
+        // Recovery between points brings EnergyAtEnd back near 1, so the lowest value is what shows a rally's cost.
+        public double EnergyMin { get; set; } = -1;
         // Rally shots by where this player aimed them: the opponent's backhand side (shot choice Backhand), forehand
         // side (Forehand), or anything else (OpenCourt, Attack, SafeDeep).
         public AimStats BackhandAim { get; set; } = new AimStats();
@@ -137,6 +140,17 @@ namespace TennisSim.Core
                     for (int i = 0; i < result.Players.Length; i++) result.Players[i].EnergyAtEnd = e.State.Players[i].Energy;
                 }
             }
+            void Lowest(FrameState f)
+            {
+                if (f.Point < fromPoint || f.Point > toPoint) return;
+                for (int i = 0; i < result.Players.Length && i < f.Players.Length; i++)
+                {
+                    var p = result.Players[i];
+                    if (p.EnergyMin < 0 || f.Players[i].Energy < p.EnergyMin) p.EnergyMin = f.Players[i].Energy;
+                }
+            }
+            foreach (var f in record.Frames) Lowest(f);
+            foreach (var e in record.Events) Lowest(e.State);
             result.MeanRallyLength = result.Points == 0 ? 0 : (double)rallyTotal / result.Points;
             return result;
         }

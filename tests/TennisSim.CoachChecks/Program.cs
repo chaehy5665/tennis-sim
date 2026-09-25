@@ -208,7 +208,7 @@ Test("Option names never repeat across axes; empty values use the full-width das
     Check(CoachText.Tactic(new Tactic()) == "양쪽 · 균형 · 혼합" && CoachText.Short(new Tactic()) == "양쪽 · 균형 · 혼합");
     var s = Play(3, 0); var views = new List<ChangeoverView>(); Play(3, 0, views);
     var serve = views[0].Serve.Rows;
-    Check(serve.Any(r => r.Values[0] == "—" && r.Values[1] == "—" && r.Values[2] == "—"), "an unused serve course shows the full-width dash");
+    Check(serve.Any(r => r.Values.Length == 2 && r.Values.All(x => x == "—")), "an unused serve course shows the full-width dash");
     Check(CoachText.None == "\u2014");
     Check(views[0].Heading.Contains("–"), "ranges keep the short dash");
 });
@@ -224,25 +224,37 @@ Test("Changeover evidence: panels follow the segment stats, previous columns app
         var aims = v.Direction.Rows;
         Check(aims.Select(r => r.Label).SequenceEqual(new[] { "백핸드 쪽", "포핸드 쪽", "그 외" }) && v.Direction.Columns.SequenceEqual(new[] { "타구", "상대 에러", "내 위너" }));
         Check(aims[0].Values.SequenceEqual(new[] { me.BackhandAim.Shots.ToString(), me.BackhandAim.ReplyErrors.ToString(), me.BackhandAim.Winners.ToString() }), "backhand-side counts");
-        Check(aims[2].Values[0] == me.OtherAim.Shots.ToString() && aims.All(r => r.Muted == (int.Parse(r.Values[0]) < CoachViews.MinShots)), "row muted below 12 shots");
+        Check(aims[2].Values[0] == me.OtherAim.Shots.ToString() && aims.All(r => r.Muted == (int.Parse(r.Values[0]) < CoachViews.MinShots || v.Direction.SampleTag)), "row muted below 12 shots or in a tagged panel");
+        Check(aims[2].Note == "빈 곳 · 강타 · 깊게" && aims[0].Note == null && aims[1].Note == null, "only 그 외 carries a second line");
         int shots = me.BackhandAim.Shots + me.ForehandAim.Shots + me.OtherAim.Shots;
         Check(v.Direction.Sample == "이번 구간 " + shots + "구" && v.Direction.SampleTag == (shots < CoachViews.MinShots));
         int n = opp.Forehands + opp.Backhands;
         Check(n == 0 || v.Direction.Split[^1].LeftText == "백핸드 " + CoachText.Percent((double)opp.Backhands / n) + " · " + opp.Backhands + "/" + n, v.Direction.Split[^1].LeftText);
         Check(v.Serve.Rows.Select(r => r.Label).SequenceEqual(new[] { "와이드", "바디", "T" }) && v.Serve.Sample == "내 서브 " + me.ServePoints + "포인트");
-        Check(v.Serve.Rows[0].Values[2] == (me.WideServe.Points == 0 ? "—" : me.WideServe.Won + "/" + me.WideServe.Points), "serve ratios as k/n");
+        Check(v.Serve.Columns.SequenceEqual(new[] { "첫 서브", "득점" }) && v.Serve.Compact, "serve course columns");
+        Check(v.Serve.Rows[0].Values.SequenceEqual(me.WideServe.Points == 0 ? new[] { "—", "—" } : new[] { me.WideServe.FirstServesIn + "/" + me.WideServe.Points, me.WideServe.Won + "/" + me.WideServe.Points }), "serve ratios as k/n");
         Check(v.Serve.Rows.All(r => !r.Values.Any(x => x.Contains("%"))), "no percent in serve course");
-        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Count == 6 && v.Compare.Rows.All(r => r.Label != "평균 랠리"));
+        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Select(r => r.Label).SequenceEqual(new[] { "득점", "서브 득점", "첫 서브 성공", "위너", "에러 포핸드/백핸드", "체력(구간 최저)" }));
         string rally = CoachText.Fixed(now.MeanRallyLength, 1) + "구";
-        Check(i == 0 ? v.Compare.Note == "평균 랠리 · 이번 " + rally : v.Compare.Note.StartsWith("평균 랠리 · 직전 ") && v.Compare.Note.EndsWith(" → 이번 " + rally), v.Compare.Note);
+        var note = v.Compare.Notes[0].Text;
+        Check(i == 0 ? note == "평균 랠리 · 이번 " + rally : note.StartsWith("평균 랠리 · 직전 ") && note.EndsWith(" → 이번 " + rally), note);
+        Check(v.Compare.Rows[5].Values[^1] == CoachText.Fixed(now.Players[1].EnergyMin, 2), "lowest energy, two decimals");
+        Check(v.Compare.Notes[1].Text == "가장 지쳤을 때 최고 속도 · " + s.Input.Players[0].Name + " " + CoachViews.SpeedLoss(s.Input.Players[0], now.Players[0].EnergyMin) + " · " + s.Input.Players[1].Name + " " + CoachViews.SpeedLoss(s.Input.Players[1], now.Players[1].EnergyMin), v.Compare.Notes[1].Text);
+        Check(v.Compare.Notes.All(x => x.Muted), "context lines under the comparison are muted");
+        // One muting rule: a tagged panel mutes every value; an untagged panel mutes only rows below their sample.
+        foreach (var panel in new[] { v.Direction, v.Serve, v.Compare })
+            if (panel.SampleTag) Check(panel.Rows.All(r => r.Muted && (r.MatchValues == null || r.MatchMuted)) && panel.Split.All(x => x.Muted) && panel.Notes.All(x => x.Muted), panel.Title + " tagged: all values muted");
+        if (!v.Compare.SampleTag) Check(v.Compare.Rows.All(r => !r.Muted), "comparison values stay in line colour above the sample");
     }
 });
 Test("Change summary names only the changed axes, or what is kept", () =>
 {
     var current = new Tactic { Aggression = Aggression.Safe };
-    Check(CoachViews.ChangeSummary(current, current.Copy()) == "변경 없음: 양쪽 · 안전 · 혼합 유지");
-    Check(CoachViews.ChangeSummary(current, new Tactic { Aggression = Aggression.Aggressive }) == "공격성 안전 → 공격 · 다음 포인트부터");
-    Check(CoachViews.ChangeSummary(current, new Tactic { Target = TargetStyle.TargetBackhand, Aggression = Aggression.Safe, Serve = ServeDirection.Wide }) == "공격 방향 양쪽 → 백핸드 공략, 서브 혼합 → 와이드 · 다음 포인트부터");
+    Check(CoachViews.ChangeSummary(current, current.Copy()).SequenceEqual(new[] { "변경 없음: 양쪽 · 안전 · 혼합 유지" }));
+    Check(CoachViews.ChangeSummary(current, new Tactic { Aggression = Aggression.Aggressive }).SequenceEqual(new[] { "공격성 안전 → 공격" }));
+    Check(CoachViews.ChangeSummary(current, new Tactic { Target = TargetStyle.TargetBackhand, Aggression = Aggression.Safe, Serve = ServeDirection.Wide }).SequenceEqual(new[] { "공격 방향 양쪽 → 백핸드 공략", "서브 코스 혼합 → 와이드" }), "one changed axis per line");
+    var all = CoachViews.ChangeSummary(current, new Tactic { Target = TargetStyle.TargetBackhand, Aggression = Aggression.Aggressive, Serve = ServeDirection.T });
+    Check(all.Length == 3 && all.All(x => !x.Contains("다음 포인트부터")), "at most three lines, fits the 3-line box");
 });
 Test("Review: opponent-coach changes with reasons, landing filters by the tactic in force", () =>
 {
@@ -448,21 +460,22 @@ Test("Motion: the broadcast layer leaves the record untouched", () =>
 Test("Serve course: opponent return position line in the design system's wording", () =>
 {
     SegmentStats Seg(int points, double total) => new SegmentStats { Points = points, Players = new[] { new SegmentPlayerStats { ServePoints = points, ReceiverShiftPoints = points, ReceiverShiftTotal = total }, new SegmentPlayerStats() } };
-    Check(CoachViews.ReturnPosition(Seg(7, 5.6), null) == "상대 리턴 위치 · 와이드 쪽 0.8 m (내 서브 7포인트)");
-    Check(CoachViews.ReturnPosition(Seg(7, 5.6), Seg(6, .3)) == "상대 리턴 위치 · 직전 가운데 → 이번 와이드 쪽 0.8 m (내 서브 7포인트)");
-    Check(CoachViews.ReturnPosition(Seg(5, -1.5), Seg(0, 0)) == "상대 리턴 위치 · 직전 — → 이번 T 쪽 0.3 m (내 서브 5포인트)");
-    Check(CoachViews.ReturnPosition(Seg(0, 0), Seg(6, 3)) == "상대 리턴 위치 · —", "no serve of mine this segment");
-    Check(CoachViews.ServePanel(Seg(5, 1)).NoteMuted && !CoachViews.ServePanel(Seg(6, 1)).NoteMuted, "muted below 6 serve points");
+    Check(CoachViews.ReturnPosition(Seg(7, 5.6), null).SequenceEqual(new[] { "상대 리턴 위치 · 이번 와이드 쪽 0.8 m", "내 서브 7포인트" }));
+    Check(CoachViews.ReturnPosition(Seg(7, 5.6), Seg(6, .3)).SequenceEqual(new[] { "상대 리턴 위치 · 이번 와이드 쪽 0.8 m", "직전 가운데 · 내 서브 7포인트" }));
+    Check(CoachViews.ReturnPosition(Seg(5, -1.5), Seg(0, 0)).SequenceEqual(new[] { "상대 리턴 위치 · 이번 T 쪽 0.3 m", "직전 — · 내 서브 5포인트" }));
+    Check(CoachViews.ReturnPosition(Seg(0, 0), Seg(6, 3)).SequenceEqual(new[] { "상대 리턴 위치 · 이번 —", "직전 와이드 쪽 0.5 m · 내 서브 0포인트" }), "no serve of mine this segment");
+    Check(CoachViews.ServePanel(Seg(5, 1)).Notes[0].Muted && !CoachViews.ServePanel(Seg(6, 1)).Notes[0].Muted, "line 1 muted below 6 serve points");
+    Check(CoachViews.ServePanel(Seg(6, 1)).Notes[1].Muted, "line 2 is context, always muted");
     // In a real coached match the line follows the recorded receiver positions.
     var views = new List<ChangeoverView>(); var s = Play(3, 0, views);
     for (int i = 0; i < views.Count; i++)
     {
         var seg = s.Segments[i]; var now = SegmentStats.Compute(s.Engine.Record, seg.FromPoint, seg.ToPoint);
         var prev = i > 0 ? SegmentStats.Compute(s.Engine.Record, s.Segments[i - 1].FromPoint, s.Segments[i - 1].ToPoint) : null;
-        Check(views[i].Serve.Note == CoachViews.ReturnPosition(now, prev) && views[i].Serve.Note.StartsWith("상대 리턴 위치 · "), views[i].Serve.Note);
-        Check(views[i].Compare.NoteMuted, "average rally stays muted");
+        Check(views[i].Serve.Notes.Select(x => x.Text).SequenceEqual(CoachViews.ReturnPosition(now, prev)) && views[i].Serve.Notes[0].Text.StartsWith("상대 리턴 위치 · 이번 "), views[i].Serve.Notes[0].Text);
+        Check(views[i].Compare.Notes[0].Muted, "average rally stays muted");
     }
-    Console.WriteLine("  sample: " + views[^1].Serve.Note);
+    Console.WriteLine("  sample: " + string.Join(" / ", views[^1].Serve.Notes.Select(x => x.Text)));
 });
 Test("Serve course rows carry the match so far per course beside this segment", () =>
 {
@@ -471,20 +484,45 @@ Test("Serve course rows carry the match so far per course beside this segment", 
     {
         var seg = s.Segments[i]; var match = SegmentStats.Compute(s.Engine.Record, 1, seg.ToPoint).Players[0];
         var p = views[i].Serve;
-        Check(p.MatchColumns.SequenceEqual(new[] { "첫 서브 성공", "서브 포인트 획득" }));
+        if (i == 0)
+        {
+            // The first changeover's match so far is this segment: only the "이번 구간" group.
+            Check(p.Groups.SequenceEqual(new[] { "이번 구간" }) && p.MatchColumns.Length == 0 && p.Rows.All(r => r.MatchValues == null), "first changeover: one group");
+            continue;
+        }
+        Check(p.Groups.SequenceEqual(new[] { "이번 구간", "경기 누적" }) && p.MatchColumns.SequenceEqual(new[] { "첫 서브", "득점" }));
         var courses = new[] { match.WideServe, match.BodyServe, match.TServe };
         for (int k = 0; k < 3; k++)
         {
             var c = courses[k]; var row = p.Rows[k];
             string Ratio(int a, int n) => n == 0 ? "—" : a + "/" + n;
             Check(row.MatchValues.SequenceEqual(new[] { Ratio(c.FirstServesIn, c.Points), Ratio(c.Won, c.Points) }), row.Label + " match values");
-            Check(row.MatchMuted == (c.Points > 0 && c.Points < CoachViews.MinPoints), row.Label + " match muted");
+            Check(row.MatchMuted == (p.SampleTag || c.Points > 0 && c.Points < CoachViews.MinPoints), row.Label + " match muted");
         }
         // The match column covers this segment: its serve points are at least the segment's.
         int segPoints = s.Engine.Record == null ? 0 : SegmentStats.Compute(s.Engine.Record, seg.FromPoint, seg.ToPoint).Players[0].ServePoints;
         Check(match.WideServe.Points + match.BodyServe.Points + match.TServe.Points >= segPoints);
     }
     Check(CoachViews.ServePanel(SegmentStats.Compute(s.Engine.Record, 1, 10)).MatchColumns.Length == 0, "no match columns without match stats");
+});
+Test("Chip descriptions: one source for pre-match and changeover, serve lean named for wide and T", () =>
+{
+    var s = Play(3, 0); var views = new List<ChangeoverView>(); Play(3, 0, views);
+    var pre = CoachViews.PreMatch(s.Input).Groups.SelectMany(g => g.Options).ToList();
+    var at = views[0].Groups.SelectMany(g => g.Options).ToList();
+    Check(pre.Select(o => o.Label + o.Description).SequenceEqual(at.Select(o => o.Label + o.Description)) && at.All(o => o.Description.Length > 0), "same sentences on both screens");
+    Check(at.Single(o => o.Label == "와이드").Description == "바깥쪽 집중. 반복하면 상대가 와이드 쪽으로 옮겨 서고 리턴이 빨라집니다.");
+    Check(at.Single(o => o.Label == "T").Description == "가운데 집중. 반복하면 상대가 T 쪽으로 옮겨 서고 리턴이 빨라집니다.");
+    Check(at.Single(o => o.Label == "바디").Description == "몸쪽 집중. 반복하면 리턴이 빨라집니다.", "body has no lean");
+    Check(CoachViews.ChoiceHint == "칩에 마우스를 올리면 설명이 나옵니다.");
+});
+Test("Top speed at the lowest energy follows Movement.SpeedLimit as a whole percent", () =>
+{
+    var p = new PlayerProfile { MaxSpeed = 6.2 };
+    Check(CoachViews.SpeedLoss(p, 1) == "변화 없음" && CoachViews.SpeedLoss(p, .98) == "변화 없음", "under half a percent reads as no change");
+    Check(CoachViews.SpeedLoss(p, .85) == "−3%", CoachViews.SpeedLoss(p, .85));
+    Check(CoachViews.SpeedLoss(p, .15) == "−17%", CoachViews.SpeedLoss(p, .15));
+    Check(CoachViews.SpeedLoss(p, -1) == "—", "no frames");
 });
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;

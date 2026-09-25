@@ -279,3 +279,20 @@ UnityEngine/UIElements 스텁(`UnityStubs.cs`)에 대고 컴파일한다. 솔루
 
 처음 스텁(3a9259c)이 담은 멤버는 UnityStubs.cs 그대로다. Mac 마일스톤 2까지 실제 Unity에서 컴파일된 호출만 모델로 삼았다.
 
+
+## 플레이 테스트 2 UX 8건 (2026-09-25, 브랜치 team/ux, Mac 확인 NOT_RUN)
+
+디자인 시스템 v37/v38 changeover.md "표본 크기", "2. 서브 코스 패널", "3. 공격성 · 구간 비교 표", "버튼 상태" 규칙이다.
+Mac에서 볼 항목은 [MAC_MILESTONE.md](MAC_MILESTONE.md) "마일스톤 3 확인 항목"에 있다.
+
+- 뷰 모델(`CoachViews`): 흐림은 값에만 준다. 패널이 기준 미만이면 `EvidencePanel.MuteAll()`로 행, 경기 누적 칸,
+  SplitBar 글자, 아래 줄을 모두 흐리고, 아니면 행이나 묶음 단위로만 흐린다. Runtime은 플래그대로 그릴 뿐 판단하지 않는다.
+  아래 줄은 `Notes`(줄마다 `Muted`)로 바뀌었다. 표 머리글 묶음은 `Groups`, 72px 칸은 `Compact`, 두 줄 항목 이름은
+  `EvidenceRow.Note`다.
+- 서브 코스: 이번 구간과 경기 누적 두 묶음, 각 "첫 서브"(들어간 첫 서브/서브)와 "득점"(딴 포인트/서브). 분모가 서브
+  수라 "서브" 열은 없앴다. 첫 체인지오버는 두 값이 같으므로 "이번 구간"만 둔다.
+- 체력: Core `SegmentPlayerStats.EnergyMin`(구간 frames와 사건 상태의 최저 체력). 속도 줄은 `Movement.SpeedLimit`의
+  최저 체력 대 체력 1 비율을 정수 %로 쓴다. 엔진 동작은 바뀌지 않았다(seed 42 기록 바이트 동일).
+- 칩 설명: 경기 전 칩과 체인지오버 설명 상자가 `CoachViews.TacticGroups` 한 곳의 문장을 쓴다. 체인지오버 칩은 설명을
+  칩 안에 넣지 않고 상자에만 보인다(마우스 → 포커스 → 마지막 클릭 순).
+- 변경 요약과 상대 코치 배너, 리뷰의 변경 목록에서 서브 축 이름을 칩 묶음과 같은 "서브 코스"로 바꿨다.

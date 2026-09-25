@@ -15,21 +15,36 @@ namespace TennisSim.Coach
     public sealed class Landing { public float X; public float Z; public bool BackhandTarget; public bool TacticBackhand; public bool In; }
     public sealed class LandingFilter { public string Key; public string Label; }
     // Changeover evidence (design system changeover.md). A row's Values follow the panel's Columns; Muted marks a row
-    // whose sample is below its threshold. A SplitRow is one line of the SplitBar: the opponent's backhand share.
-    // MatchValues (optional) follow MatchColumns: the same measure over the match so far, beside this segment's Values.
-    public sealed class EvidenceRow { public string Label; public string[] Values; public bool Muted; public string[] MatchValues; public bool MatchMuted; }
+    // whose values are below their sample threshold. Note is an optional second line under the row label ("그 외").
+    // A SplitRow is one line of the SplitBar: the opponent's backhand share. MatchValues (optional) follow
+    // MatchColumns: the same measure over the match so far, beside this segment's Values.
+    // Muting is one rule (changeover.md "표본 크기"): only values are muted, never labels, headers, titles or badges.
+    // A panel below its threshold gets the SampleTag and every value muted; a row or group below mutes just its values.
+    public sealed class EvidenceRow { public string Label; public string Note; public string[] Values; public bool Muted; public string[] MatchValues; public bool MatchMuted; }
     public sealed class SplitRow { public string Label; public float Backhand; public string LeftText; public string RightText; public bool Muted; }
+    // A body line under the table: a value that is not per player (average rally) or a signal (return position).
+    public sealed class NoteLine { public string Text; public bool Muted; }
     public sealed class EvidencePanel
     {
         public string Title; public string Sample; public bool SampleTag;
-        // A body line under the table for a value that is not per player (average rally), or null.
-        public string Note;
-        // Note in line-muted: always for a context line (average rally), for a decision line only below its sample.
-        public bool NoteMuted;
+        public List<NoteLine> Notes = new List<NoteLine>();
         public string[] Columns = new string[0];
         public string[] MatchColumns = new string[0];
+        // Group header over the value columns: Groups[0] spans Columns, Groups[1] spans MatchColumns. Empty: no group row.
+        public string[] Groups = new string[0];
+        // Value cells at the compact width (72px) for the whole table.
+        public bool Compact;
         public List<SplitRow> Split = new List<SplitRow>();
         public List<EvidenceRow> Rows = new List<EvidenceRow>();
+
+        // The panel is below its threshold: every value, split line and note is muted.
+        public EvidencePanel MuteAll()
+        {
+            foreach (var r in Rows) { r.Muted = true; r.MatchMuted = true; }
+            foreach (var s in Split) s.Muted = true;
+            foreach (var n in Notes) n.Muted = true;
+            return this;
+        }
     }
     public sealed class OpponentChangeRow { public string Kicker; public string Change; public string Reasons; }
     public sealed class SegmentRow { public string Games; public int FirstGame; public int LastGame; public string TacticA; public string TacticB; public int Won; public int Points; }
@@ -99,6 +114,10 @@ namespace TennisSim.Coach
 
     public static class CoachViews
     {
+        // The changeover's choice description box before any chip is hovered, focused or clicked (line-muted).
+        public const string ChoiceHint = "칩에 마우스를 올리면 설명이 나옵니다.";
+
+        // One source for the chip descriptions: the pre-match chips show them inline, the changeover in its box.
         public static List<TacticGroup> TacticGroups(bool withDescriptions)
         {
             TacticOption O(string key, string value, string label, string description) => new TacticOption { Key = key, Value = value, Label = label, Description = withDescriptions ? description : "" };
@@ -113,9 +132,9 @@ namespace TennisSim.Coach
                     O("aggression", "aggressive", "공격", "쉬운 공을 강하게 응징합니다. 빠른 공에는 실수가 급증합니다.") } },
                 new TacticGroup { Key = "serve", Label = "서브 코스", Options = {
                     O("serve", "mixed", "혼합", "코스를 섞어 읽히지 않습니다."),
-                    O("serve", "wide", "와이드", "바깥쪽 집중. 반복하면 리턴이 빨라집니다."),
+                    O("serve", "wide", "와이드", "바깥쪽 집중. 반복하면 상대가 와이드 쪽으로 옮겨 서고 리턴이 빨라집니다."),
                     O("serve", "body", "바디", "몸쪽 집중. 반복하면 리턴이 빨라집니다."),
-                    O("serve", "t", "T", "가운데 집중. 반복하면 리턴이 빨라집니다.") } }
+                    O("serve", "t", "T", "가운데 집중. 반복하면 상대가 T 쪽으로 옮겨 서고 리턴이 빨라집니다.") } }
             };
         }
 
@@ -227,7 +246,7 @@ namespace TennisSim.Coach
                 Heading = "체인지오버 · " + games + " 구간 (포인트 " + seg.FromPoint + "–" + seg.ToPoint + ") · " + s.Points + "포인트",
                 CurrentA = state.Tactics[0].Copy(), CurrentAText = CoachText.Tactic(state.Tactics[0]),
                 NextChangeover = state.Score.TieBreak ? "다음 체인지오버: 6포인트 후" : "다음 체인지오버: 2게임 후",
-                Groups = TacticGroups(false)
+                Groups = TacticGroups(true)
             };
             var change = session.OpponentChange;
             if (change != null)
@@ -241,7 +260,7 @@ namespace TennisSim.Coach
             view.HasPrevious = prev != null;
             view.Direction = DirectionPanel(s, prev);
             view.Serve = ServePanel(s, prev, m);
-            view.Compare = ComparePanel(s, prev);
+            view.Compare = ComparePanel(s, prev, session.Input);
             return view;
         }
 
@@ -249,14 +268,7 @@ namespace TennisSim.Coach
         // 12 shots (OpponentCoach's minimum strokes) are shown muted, with a "참고용" tag when the whole panel is under.
         public const int MinPoints = 6, MinShots = 12;
 
-        public static string ChangeParts(Tactic before, Tactic after)
-        {
-            var parts = new List<string>();
-            if (before.Target != after.Target) parts.Add("공격 방향 " + CoachText.Target(before.Target) + " → " + CoachText.Target(after.Target));
-            if (before.Aggression != after.Aggression) parts.Add("공격성 " + CoachText.Aggression(before.Aggression) + " → " + CoachText.Aggression(after.Aggression));
-            if (before.Serve != after.Serve) parts.Add("서브 " + CoachText.Serve(before.Serve) + " → " + CoachText.Serve(after.Serve));
-            return string.Join(", ", parts);
-        }
+        public static string ChangeParts(Tactic before, Tactic after) => string.Join(", ", ChangeList(before, after));
         static string ChangeReasons(CoachDecision change, string[] names) => string.Join(" ", change.Reasons.Select(r => CoachText.Reason(r, names[0])));
 
         static string Count(int k, int n) => n == 0 ? CoachText.None : CoachText.Ratio(k, n);
@@ -268,6 +280,8 @@ namespace TennisSim.Coach
             double share = (double)bh / n;
             return new SplitRow { Label = label, Backhand = (float)share, LeftText = "백핸드 " + CoachText.Percent(share) + " · " + CoachText.Ratio(bh, n), RightText = "포핸드 " + CoachText.Percent(1 - share), Muted = n < MinShots };
         }
+
+        public const string OtherAimNote = "빈 곳 · 강타 · 깊게";
 
         // Attack direction: where the opponent actually hit from (SplitBar, previous and now) and what my shots aimed at
         // each side produced this segment, as counts.
@@ -281,43 +295,52 @@ namespace TennisSim.Coach
             EvidenceRow Aim(string label, AimStats a) => new EvidenceRow { Label = label, Values = new[] { a.Shots.ToString(), a.ReplyErrors.ToString(), a.Winners.ToString() }, Muted = a.Shots < MinShots };
             panel.Rows.Add(Aim("백핸드 쪽", me.BackhandAim));
             panel.Rows.Add(Aim("포핸드 쪽", me.ForehandAim));
-            panel.Rows.Add(Aim("그 외", me.OtherAim));
-            return panel;
+            // "그 외" is usually over half the shots, so the row says what it holds: OpenCourt, Attack, SafeDeep.
+            // Attack reads "강타" because "공격" is an aggression chip.
+            var other = Aim("그 외", me.OtherAim); other.Note = OtherAimNote;
+            panel.Rows.Add(other);
+            return panel.SampleTag ? panel.MuteAll() : panel;
         }
 
-        // Serve course: my serve points by the first serve's course. Ratios as k/n, never %; an unused course stays as "—".
-        // With the match so far, each course also shows its match first serves in and serve points won (k/n): one
-        // segment is only a few serves per course, so the match total is what says whether a course pays.
+        // Serve course: my serve points by the first serve's course. Two column groups, "이번 구간" and "경기 누적", each
+        // "첫 서브" (first serves in / serves) and "득점" (points won / serves): the denominator is the serve count, so
+        // there is no separate serve column. The match group is the expectation for switching courses, since one
+        // segment is only a few serves per course; at the first changeover it equals the segment and is left out.
+        // Ratios as k/n, never %; an unused course stays as "—".
         public static EvidencePanel ServePanel(SegmentStats now, SegmentStats prev = null, SegmentStats match = null)
         {
             var me = now.Players[0];
-            var panel = new EvidencePanel { Title = "서브 코스", Sample = "내 서브 " + me.ServePoints + "포인트", SampleTag = me.ServePoints < MinPoints, Columns = new[] { "서브", "첫 서브 성공", "서브 포인트 획득" } };
-            if (match != null) panel.MatchColumns = new[] { "첫 서브 성공", "서브 포인트 획득" };
+            bool withMatch = match != null && prev != null;
+            var panel = new EvidencePanel
+            {
+                Title = "서브 코스", Sample = "내 서브 " + me.ServePoints + "포인트", SampleTag = me.ServePoints < MinPoints, Compact = true,
+                Columns = new[] { "첫 서브", "득점" }, Groups = withMatch ? new[] { "이번 구간", "경기 누적" } : new[] { "이번 구간" }
+            };
+            if (withMatch) panel.MatchColumns = new[] { "첫 서브", "득점" };
+            string[] Values(ServeCourseStats c) => new[] { Count(c.FirstServesIn, c.Points), Count(c.Won, c.Points) };
+            bool Few(ServeCourseStats c) => c.Points > 0 && c.Points < MinPoints;
             EvidenceRow Course(string label, ServeCourseStats c, ServeCourseStats total) => new EvidenceRow
             {
-                Label = label, Muted = c.Points > 0 && c.Points < MinPoints,
-                Values = new[] { c.Points == 0 ? CoachText.None : c.Points.ToString(), Count(c.FirstServesIn, c.Points), Count(c.Won, c.Points) },
-                MatchValues = total == null ? null : new[] { Count(total.FirstServesIn, total.Points), Count(total.Won, total.Points) },
-                MatchMuted = total != null && total.Points > 0 && total.Points < MinPoints
+                Label = label, Values = Values(c), Muted = Few(c),
+                MatchValues = withMatch ? Values(total) : null, MatchMuted = withMatch && Few(total)
             };
             var all = match?.Players[0];
             panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Wide), me.WideServe, all?.WideServe));
             panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Body), me.BodyServe, all?.BodyServe));
             panel.Rows.Add(Course(CoachText.Serve(ServeDirection.T), me.TServe, all?.TServe));
-            // Whether the opponent is reading my serve: where the receiver stood against it (design system changeover.md
-            // "2. 서브 코스 패널"). A decision line, so line colour, muted below 6 of my serve points.
-            panel.Note = ReturnPosition(now, prev);
-            panel.NoteMuted = me.ReceiverShiftPoints < MinPoints;
-            return panel;
+            // Whether the opponent is reading my serve: where the receiver stood against it (changeover.md "2. 서브 코스
+            // 패널"). Line 1 is a decision value, so line colour, muted below 6 of my serve points; line 2 is context.
+            var lines = ReturnPosition(now, prev);
+            panel.Notes.Add(new NoteLine { Text = lines[0], Muted = me.ReceiverShiftPoints < MinPoints });
+            panel.Notes.Add(new NoteLine { Text = lines[1], Muted = true });
+            return panel.SampleTag ? panel.MuteAll() : panel;
         }
 
-        // "상대 리턴 위치 · 와이드 쪽 0.8 m (내 서브 7포인트)", or "직전 … → 이번 …" after the first changeover. The side is
-        // named like the chips, metres to one decimal, and a mean under 0.1 m reads as "가운데".
-        public static string ReturnPosition(SegmentStats now, SegmentStats prev)
+        // Two lines: "상대 리턴 위치 · 이번 와이드 쪽 0.8 m" and "직전 가운데 · 내 서브 7포인트" ("내 서브 7포인트" alone at
+        // the first changeover). The side is named like the chips, metres to one decimal, a mean under 0.1 m reads as
+        // "가운데", and a segment without my serves reads "—". The point count is this segment's.
+        public static string[] ReturnPosition(SegmentStats now, SegmentStats prev)
         {
-            const string Head = "상대 리턴 위치 · ";
-            var me = now.Players[0];
-            if (me.ReceiverShiftPoints == 0) return Head + CoachText.None;
             string Side(SegmentPlayerStats p)
             {
                 if (p.ReceiverShiftPoints == 0) return CoachText.None;
@@ -325,13 +348,15 @@ namespace TennisSim.Coach
                 if (Math.Abs(m) < .1) return "가운데";
                 return (m > 0 ? CoachText.Serve(ServeDirection.Wide) : CoachText.Serve(ServeDirection.T)) + " 쪽 " + CoachText.Fixed(Math.Abs(m), 1) + " m";
             }
-            string where = prev == null ? Side(me) : "직전 " + Side(prev.Players[0]) + " → 이번 " + Side(me);
-            return Head + where + " (내 서브 " + me.ReceiverShiftPoints + "포인트)";
+            var me = now.Players[0];
+            string count = "내 서브 " + me.ReceiverShiftPoints + "포인트";
+            return new[] { "상대 리턴 위치 · 이번 " + Side(me), prev == null ? count : "직전 " + Side(prev.Players[0]) + " · " + count };
         }
 
         // Aggression: this segment beside the previous one for both players (A previous, A now, B previous, B now), or
-        // just the two "now" columns at the first changeover. Match totals belong to the review.
-        public static EvidencePanel ComparePanel(SegmentStats now, SegmentStats prev)
+        // just the two "now" columns at the first changeover. Match totals belong to the review. With the match input,
+        // a last line gives each player's top speed at their lowest energy against full energy.
+        public static EvidencePanel ComparePanel(SegmentStats now, SegmentStats prev, MatchInput input = null)
         {
             var panel = new EvidencePanel { Title = "공격성 · 구간 비교", Sample = "이번 구간 " + now.Points + "포인트", SampleTag = now.Points < MinPoints };
             panel.Columns = prev != null ? new[] { "직전", "이번", "직전", "이번" } : new[] { "이번", "이번" };
@@ -343,21 +368,43 @@ namespace TennisSim.Coach
                 return new EvidenceRow { Label = label, Values = values };
             }
             panel.Rows.Add(R("득점", (x, p) => p.PointsWon.ToString()));
-            panel.Rows.Add(R("서브 포인트 획득", (x, p) => Count(p.ServePointsWon, p.ServePoints)));
+            panel.Rows.Add(R("서브 득점", (x, p) => Count(p.ServePointsWon, p.ServePoints)));
             panel.Rows.Add(R("첫 서브 성공", (x, p) => Count(p.FirstServesIn, p.ServePoints)));
             panel.Rows.Add(R("위너", (x, p) => p.Winners.ToString()));
             panel.Rows.Add(R("에러 포핸드/백핸드", (x, p) => p.ForehandErrors + "/" + p.BackhandErrors));
-            panel.Rows.Add(R("체력", (x, p) => Energy(p)));
+            // Energy at the end of a segment is back near 1 (recovery between points), so the row shows the lowest.
+            panel.Rows.Add(R("체력(구간 최저)", (x, p) => p.EnergyMin < 0 ? CoachText.None : CoachText.Fixed(p.EnergyMin, 2)));
             // Average rally belongs to the segment, not to a player: one line under the table, not two equal cells.
             string Rally(SegmentStats x) => CoachText.Fixed(x.MeanRallyLength, 1) + "구";
-            panel.Note = prev != null ? "평균 랠리 · 직전 " + Rally(prev) + " → 이번 " + Rally(now) : "평균 랠리 · 이번 " + Rally(now);
-            panel.NoteMuted = true;
-            return panel;
+            panel.Notes.Add(new NoteLine { Text = prev != null ? "평균 랠리 · 직전 " + Rally(prev) + " → 이번 " + Rally(now) : "평균 랠리 · 이번 " + Rally(now), Muted = true });
+            if (input != null)
+                panel.Notes.Add(new NoteLine { Text = "가장 지쳤을 때 최고 속도 · " + string.Join(" · ", Enumerable.Range(0, 2).Select(i => input.Players[i].Name + " " + SpeedLoss(input.Players[i], now.Players[i].EnergyMin))), Muted = true });
+            return panel.SampleTag ? panel.MuteAll() : panel;
         }
 
-        // The change summary under the chips: changed axes only, or what is kept.
-        public static string ChangeSummary(Tactic current, Tactic pending) =>
-            CoachSession.Same(current, pending) ? "변경 없음: " + CoachText.Tactic(current) + " 유지" : ChangeParts(current, pending) + " · 다음 포인트부터";
+        // Movement.SpeedLimit at the lowest energy against full energy, as a whole percent ("−3%"), "변화 없음" at 0.
+        // Shot error also grows with fatigue, but it has no percent, so it is not shown.
+        public static string SpeedLoss(PlayerProfile profile, double energyMin)
+        {
+            if (energyMin < 0) return CoachText.None;
+            double ratio = Movement.SpeedLimit(profile, new PlayerState { Energy = energyMin }) / Movement.SpeedLimit(profile, new PlayerState { Energy = 1 }) - 1;
+            int percent = (int)Math.Round(ratio * 100, MidpointRounding.AwayFromZero);
+            return percent == 0 ? "변화 없음" : (percent < 0 ? "−" : "+") + Math.Abs(percent) + "%";
+        }
+
+        // The change summary under the chips: one changed axis per line ("공격성 안전 → 공격"), at most three, or one line
+        // for what is kept. "다음 포인트부터" is the side panel's subtitle, not repeated here.
+        public static string[] ChangeSummary(Tactic current, Tactic pending) =>
+            CoachSession.Same(current, pending) ? new[] { "변경 없음: " + CoachText.Tactic(current) + " 유지" } : ChangeList(current, pending).ToArray();
+
+        static List<string> ChangeList(Tactic before, Tactic after)
+        {
+            var parts = new List<string>();
+            if (before.Target != after.Target) parts.Add("공격 방향 " + CoachText.Target(before.Target) + " → " + CoachText.Target(after.Target));
+            if (before.Aggression != after.Aggression) parts.Add("공격성 " + CoachText.Aggression(before.Aggression) + " → " + CoachText.Aggression(after.Aggression));
+            if (before.Serve != after.Serve) parts.Add("서브 코스 " + CoachText.Serve(before.Serve) + " → " + CoachText.Serve(after.Serve));
+            return parts;
+        }
 
         public static ReviewView Review(CoachSession session)
         {

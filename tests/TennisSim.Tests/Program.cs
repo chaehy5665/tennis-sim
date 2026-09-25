@@ -416,6 +416,22 @@ Test("Segment stats over the whole match agree with match stats", () =>
         Check(half.Points + rest.Points == s.Points && half.Players[1].Winners + rest.Players[1].Winners == s.Players[1].Winners);
     }
 });
+Test("Segment lowest energy: the minimum over the range's frames and event states, split ranges combine", () =>
+{
+    foreach (uint seed in new uint[] { 3, 42 })
+    {
+        var r = Run(seed); int n = r.FinalScore.PointsPlayed;
+        var whole = SegmentStats.Compute(r, 1, n); var a = SegmentStats.Compute(r, 1, n / 2); var b = SegmentStats.Compute(r, n / 2 + 1, n);
+        for (int i = 0; i < 2; i++)
+        {
+            double expected = r.Frames.Select(f => f.Players[i].Energy).Concat(r.Events.Select(e => e.State.Players[i].Energy)).Min();
+            Check(whole.Players[i].EnergyMin == expected, "whole-match minimum");
+            Check(whole.Players[i].EnergyMin == Math.Min(a.Players[i].EnergyMin, b.Players[i].EnergyMin), "halves combine");
+            Check(whole.Players[i].EnergyMin >= .15 && whole.Players[i].EnergyMin <= whole.Players[i].EnergyAtEnd, "within [.15, end energy]");
+        }
+    }
+    Check(SegmentStats.Compute(Run(3), 9999, 9999).Players.All(p => p.EnergyMin == -1), "empty range has no minimum");
+});
 Test("Aim and serve-course segment stats: every shot ends once, segments add up to the match", () =>
 {
     foreach (uint seed in new uint[] { 3, 42 })

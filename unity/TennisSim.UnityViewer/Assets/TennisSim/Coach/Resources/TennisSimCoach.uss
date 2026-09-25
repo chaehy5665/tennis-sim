@@ -99,6 +99,10 @@
 .tsc-inset { flex-shrink: 0; background-color: var(--ground); border-radius: 0; padding: 16px; }
 .tsc-inset--compact { padding: 8px; }
 .tsc-root .tsc-inset__kicker { margin-bottom: 4px; }
+/* v37: fixed heights (min-height, border box) for the changeover's choice description (2 body lines) and change
+   summary (3 body lines), so clicking a chip never moves the buttons below. */
+.tsc-inset--lines-2 { min-height: 60px; }
+.tsc-inset--lines-3 { min-height: 82px; }
 
 /* Scrollbar (vertical only): 8px, no arrow buttons, ground track, control-border thumb (line-muted on hover). */
 .tsc-root .unity-scroller--horizontal { display: none; }
@@ -122,3 +126,9 @@
 .tsc-table-row { flex-shrink: 0; min-height: 32px; align-items: center; flex-direction: row; border-top-width: 1px; border-color: var(--net); padding-top: 6px; padding-bottom: 6px; }
 .tsc-root .tsc-cell { width: 80px; -unity-text-align: middle-right; }
 .tsc-root .tsc-cell--label { flex-grow: 1; -unity-text-align: middle-left; }
+/* v37: compact value cell (72px, one width per table), a group header row over the value cells, and the 12px second
+   line of a two-line item name. */
+.tsc-root .tsc-cell--compact { width: 72px; }
+.tsc-table-group { flex-shrink: 0; flex-direction: row; justify-content: flex-end; }
+.tsc-root .tsc-table-group .tsc-label { color: var(--line-muted); }
+.tsc-root .tsc-cell__note { font-size: 12px; min-height: 16px; color: var(--line-muted); }

@@ -102,6 +102,12 @@ namespace UnityEngine.UIElements
 
     public class EventBase { }
     public class GeometryChangedEvent : EventBase { public Rect oldRect => default; public Rect newRect => default; }
+    // Unity 6: PointerEnterEvent/PointerLeaveEvent derive from PointerEventBase<T>, FocusInEvent/FocusOutEvent from
+    // FocusEventBase<T>; the coach UI only registers callbacks for them, so the stubs carry no members.
+    public class PointerEnterEvent : EventBase { }
+    public class PointerLeaveEvent : EventBase { }
+    public class FocusInEvent : EventBase { }
+    public class FocusOutEvent : EventBase { }
     public delegate void EventCallback<in TEventType>(TEventType evt);
     public class Painter2D
     {

@@ -96,6 +96,10 @@ namespace TennisSim.Coach
                     return r.To == Core.Aggression.Safe
                         ? "우리 선수는 파워(" + Fixed(r.A, 2) + ")에 비해 컨트롤(" + Fixed(r.B, 2) + ")이 낮아 안전하게 칩니다."
                         : "우리 선수는 컨트롤(" + Fixed(r.B, 2) + ")에 비해 파워(" + Fixed(r.A, 2) + ")가 약해 먼저 공격합니다.";
+                case CoachReasonKind.WatchingStyle: return opponent + " 선수가 또 " + Aggression(r.From) + "으로 바꿨습니다. 한 구간 더 지켜봅니다.";
+                case CoachReasonKind.KeepStyle:
+                    return opponent + " 선수가 " + Aggression(r.From) + "으로 바꾼 것을 봤습니다. "
+                        + (r.A > 0 ? "우리 선수에게 맞는 " + Aggression(r.To) + "을 유지합니다." : "지금 " + Aggression(r.To) + "이 맞는 대응이라 유지합니다.");
                 case CoachReasonKind.OpponentScouting:
                     return r.To == Core.Aggression.Safe
                         ? opponent + "의 공이 무겁지만(파워 " + Fixed(r.A, 2) + ") 컨트롤(" + Fixed(r.B, 2) + ")이 낮아 안전하게 버팁니다."

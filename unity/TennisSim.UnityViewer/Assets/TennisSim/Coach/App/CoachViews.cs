@@ -83,6 +83,8 @@ namespace TennisSim.Coach
         public string Heading;
         public int[] Games;
         public bool OpponentChanged;
+        // A banner is due: the opponent coach changed its tactic or noted the user's change (OpponentKicker/Text).
+        public bool OpponentBanner;
         public string OpponentKicker;
         public string OpponentText;
         // One evidence panel per tactic axis: attack direction, serve course, and aggression as a segment comparison.
@@ -253,11 +255,18 @@ namespace TennisSim.Coach
             var change = session.OpponentChange;
             if (change != null)
             {
-                view.OpponentChanged = true;
+                view.OpponentChanged = view.OpponentBanner = true;
                 view.OpponentKicker = names[1] + " 코치가 전술을 바꿨습니다";
-                view.OpponentText = ChangeParts(state.Tactics[1], change.Tactic) + " (다음 포인트부터). " + ChangeReasons(change, names);
+                view.OpponentText = ChangeParts(state.Tactics[1], change.Tactic) + " (다음 포인트부터). " + ChangeReasons(change, names) + NoteText(change, names);
+                // The direction sentence only when the attack direction really changes; a note alone never gets it.
                 var effect = DirectionEffect(state.Tactics[1], change.Tactic, names[0]);
                 if (effect != null) view.OpponentText += " " + effect;
+            }
+            else if (session.OpponentNote != null)
+            {
+                view.OpponentBanner = true;
+                view.OpponentKicker = names[1] + " 코치가 지켜보고 있습니다";
+                view.OpponentText = NoteText(session.OpponentNote, names).TrimStart();
             }
             int prevIndex = session.Segments.Count - 2;
             var prev = prevIndex >= 0 ? SegmentStats.Compute(session.Engine.Record, session.Segments[prevIndex].FromPoint, session.Segments[prevIndex].ToPoint) : null;
@@ -281,6 +290,7 @@ namespace TennisSim.Coach
             string more = after.Target == TargetStyle.TargetBackhand ? "늘어납니다" : "줄어듭니다";
             return "이제 " + me + "가 백핸드로 받는 공이 " + more + ". 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
         }
+        static string NoteText(CoachDecision d, string[] names) => string.Concat(d.Notes.Select(r => " " + CoachText.Reason(r, names[0])));
         static string ChangeReasons(CoachDecision change, string[] names) => string.Join(" ", change.Reasons.Select(r => CoachText.Reason(r, names[0])));
 
         static string Count(int k, int n) => n == 0 ? CoachText.None : CoachText.Ratio(k, n);

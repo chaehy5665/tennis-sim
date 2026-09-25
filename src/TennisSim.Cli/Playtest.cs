@@ -9,7 +9,9 @@ namespace TennisSim.Cli;
 public static class Playtest
 {
     public sealed record PolicyRow(string PlayerA, string PlayerB, string Policy, int Sets, int SetsWonA, int PointsWonA,
-        int Points, int ChangesA, int ChangesB, int TargetChangesB, int SetsWithTargetReversalB, int Failures);
+        int Points, int ChangesA, int ChangesB, int TargetChangesB, int SetsWithTargetReversalB, int Failures,
+        int BannersB, int FirstStyleChangesA, int AnsweredNextB, int CounteredNextB, int CounteredLaterB, int CounterDelaySumB,
+        int KeptByScoutingNextB, int KeptAsAnswerNextB, int WatchedNextB);
     // One changeover: what A's policy changed and how the following segment differed from the one before it.
     public sealed record Shift(string Policy, string Axis, string Change, double Before, double After, int PointsBefore, int PointsAfter);
     public sealed record Result(List<PolicyRow> Rows, List<Shift> Shifts, List<int> SegmentPoints);
@@ -44,6 +46,9 @@ public static class Playtest
         {
             var (pa, pb, policy) = jobs[j];
             int setsA = 0, pointsA = 0, points = 0, changesA = 0, changesB = 0, targetB = 0, reversals = 0, failures = 0;
+            // B's banners (a change or a note) and how B answered A's first aggression change: at the next changeover
+            // with a banner about it, and the changeovers until B's aggression changed.
+            int banners = 0, firstChanges = 0, answeredNext = 0, counteredNext = 0, counteredLater = 0, delaySum = 0, keptScout = 0, keptAnswer = 0, watched = 0;
             shifts[j] = new List<Shift>(); segments[j] = new List<int>();
             for (int i = 0; i < sets; i++)
             {
@@ -52,7 +57,8 @@ public static class Playtest
                 input.Config.FirstServer = i % 2; input.Config.InitialEndA = (i / 2) % 2 == 0 ? -1 : 1;
                 // The policy's own draws never touch the engine's random stream.
                 var choices = new SeedRandom(s ^ 0x9E3779B9u);
-                var engine = new MatchEngine(input); int from = 1, targetChangesThisSet = 0;
+                var engine = new MatchEngine(input); int from = 1, targetChangesThisSet = 0, changeover = 0, firstStyleChange = -1;
+                bool counted = false;
                 SegmentStats? previous = null; (string Axis, string Change)[] pending = Array.Empty<(string, string)>();
                 while (engine.AdvanceToChangeover())
                 {
@@ -66,11 +72,28 @@ public static class Playtest
                             var shift = Measure(policy, axis, change, previous, segment);
                             if (!double.IsNaN(shift.Before) && !double.IsNaN(shift.After)) shifts[j].Add(shift);
                         }
-                    var b = OpponentCoach.Decide(1, engine.Record, from, to, state.Tactics, input.Players);
+                    changeover++;
+                    var assessed = OpponentCoach.Assess(1, engine.Record, from, to, state.Tactics, input.Players);
+                    var b = assessed.Changed ? assessed.Tactic : null;
                     if (b != null)
                     {
                         engine.QueueTactics(1, b); changesB++;
                         if (b.Target != state.Tactics[1].Target) { targetB++; targetChangesThisSet++; }
+                    }
+                    if (assessed.Changed || assessed.Notes.Count > 0) banners++;
+                    bool styleMoved = b != null && b.Aggression != state.Tactics[1].Aggression;
+                    if (firstStyleChange > 0 && !counted)
+                    {
+                        if (changeover == firstStyleChange + 1)
+                        {
+                            firstChanges++;
+                            if (styleMoved || assessed.Notes.Count > 0) answeredNext++;
+                            if (styleMoved) counteredNext++;
+                            foreach (var n in assessed.Notes)
+                                if (n.Kind == CoachReasonKind.WatchingStyle) watched++;
+                                else if (n.A > 0) keptScout++; else keptAnswer++;
+                        }
+                        if (styleMoved) { counteredLater++; delaySum += changeover - firstStyleChange; counted = true; }
                     }
                     Tactic? a = policy switch
                     {
@@ -81,6 +104,7 @@ public static class Playtest
                     var current = state.Tactics[0];
                     if (a != null && (a.Target != current.Target || a.Aggression != current.Aggression || a.Serve != current.Serve)) { engine.QueueTactics(0, a); changesA++; }
                     else a = current;
+                    if (firstStyleChange < 0 && a.Aggression != current.Aggression) firstStyleChange = changeover;
                     pending = new[]
                     {
                         ("target", a.Target == current.Target ? "none" : a.Target == TargetStyle.TargetBackhand ? "to-backhand" : "to-balanced"),
@@ -95,7 +119,8 @@ public static class Playtest
                 if (r.FinalScore.Winner == 0) setsA++;
                 pointsA += r.Stats.Players[0].PointsWon; points += r.FinalScore.PointsPlayed;
             }
-            rows[j] = new PolicyRow(pa, pb, policy, sets, setsA, pointsA, points, changesA, changesB, targetB, reversals, failures);
+            rows[j] = new PolicyRow(pa, pb, policy, sets, setsA, pointsA, points, changesA, changesB, targetB, reversals, failures,
+                banners, firstChanges, answeredNext, counteredNext, counteredLater, delaySum, keptScout, keptAnswer, watched);
         });
         return new Result(rows.ToList(), shifts.SelectMany(x => x).ToList(), segments.SelectMany(x => x).ToList());
     }
@@ -160,5 +185,11 @@ public static class Playtest
         o.WriteLine("\n4. Opponent AI stability (B coached, all policies)");
         int sets = rows.Sum(r => r.Sets - r.Failures);
         o.WriteLine($"   changes per set {rows.Sum(r => r.ChangesB) / (double)sets:F2}, target changes per set {rows.Sum(r => r.TargetChangesB) / (double)sets:F2}, sets with a target reversal {Pct(rows.Sum(r => r.SetsWithTargetReversalB), sets):F1}%");
+        // Reactivity: B's banners per set (a change or a note), and A's first aggression change that had a next changeover.
+        int firsts = rows.Sum(r => r.FirstStyleChangesA), later = rows.Sum(r => r.CounteredLaterB);
+        o.WriteLine($"   banners per set {rows.Sum(r => r.BannersB) / (double)sets:F2}; after A's first aggression change (n={firsts}): answered at the next changeover {Pct(rows.Sum(r => r.AnsweredNextB), firsts):F1}%, B's aggression changed there {Pct(rows.Sum(r => r.CounteredNextB), firsts):F1}%, changed at all {Pct(later, firsts):F1}% after {(later == 0 ? 0 : rows.Sum(r => r.CounterDelaySumB) / (double)later):F2} changeovers on average");
+        var changing = rows.Where(r => r.Policy is "reader" or "random").ToList(); int changingSets = changing.Sum(r => r.Sets - r.Failures);
+        o.WriteLine($"   banners per set against an A that changes (reader, random) {changing.Sum(r => r.BannersB) / (double)changingSets:F2}, against a static A {(rows.Sum(r => r.BannersB) - changing.Sum(r => r.BannersB)) / (double)(sets - changingSets):F2}");
+        o.WriteLine($"   at that next changeover B kept its style by scouting {Pct(rows.Sum(r => r.KeptByScoutingNextB), firsts):F1}%, kept it as the right answer {Pct(rows.Sum(r => r.KeptAsAnswerNextB), firsts):F1}%, watched a shaking A {Pct(rows.Sum(r => r.WatchedNextB), firsts):F1}%");
     }
 }

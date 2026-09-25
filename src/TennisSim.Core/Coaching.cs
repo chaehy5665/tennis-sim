@@ -175,7 +175,10 @@ namespace TennisSim.Core
         TryStyle,               // From = the rule's aggression, To = the one tried; A = own point share with From, B = its points
         MeasuredStyle,          // From = the rule's aggression, To = the chosen one; A = own point share with To, B = with From
         SelfScouting,           // To = the style the own profile suggests; A = own mean power, B = own mean control
-        OpponentScouting        // To = the style the opponent's profile suggests; A = its mean power, B = its mean control
+        OpponentScouting,       // To = the style the opponent's profile suggests; A = its mean power, B = its mean control
+        // Notes: the coach saw the opponent change its aggression but keeps its own tactic (CoachDecision.Notes).
+        WatchingStyle,          // From = the opponent's new style; it keeps changing, so the coach watches another segment
+        KeepStyle               // From = the opponent's new style, To = own kept style; A = 1 when scouting keeps it
     }
     public sealed class CoachReason
     {
@@ -191,6 +194,10 @@ namespace TennisSim.Core
         public Tactic Tactic { get; set; } = new Tactic();
         // Reasons for the settings that differ from the current tactic, in target, aggression, serve order.
         public List<CoachReason> Reasons { get; set; } = new List<CoachReason>();
+        // What the coach noticed without changing anything (WatchingStyle, KeepStyle). A caller shows these but must
+        // not queue Tactic for them: the record holds real changes only.
+        public List<CoachReason> Notes { get; set; } = new List<CoachReason>();
+        public bool Changed => Reasons.Count > 0;
     }
 
     public static class OpponentCoach
@@ -208,11 +215,21 @@ namespace TennisSim.Core
         // favours safety; an opponent below LightBall power invites attack, one above HeavyBall power with control
         // under Erratic invites safety.
         const double SelfGap = .15, LightBall = .55, HeavyBall = .85, Erratic = .72;
+        // A switch of aggression is held rather than countered only when the opponent also switched at one of this many
+        // changeovers before (a set has only four to nine changeovers, so holding every switch hid most reactions).
+        const int HoldWindow = 2;
 
         public static Tactic? Decide(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players) =>
             DecideWithReasons(self, record, fromPoint, toPoint, current, players)?.Tactic;
 
+        // Null when nothing changes, as before; Assess also returns notes when the tactic stays.
         public static CoachDecision? DecideWithReasons(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players)
+        {
+            var decision = Assess(self, record, fromPoint, toPoint, current, players);
+            return decision.Changed ? decision : null;
+        }
+
+        public static CoachDecision Assess(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players)
         {
             int other = 1 - self;
             CoachReason? target = null, aggression = null, serve = null;
@@ -244,13 +261,15 @@ namespace TennisSim.Core
             // Aggression starts from scouting, like the target does: the own profile (a heavy but erratic hitter plays
             // safe, an accurate player with a light ball attacks) and the opponent's (attack a light ball, stay safe
             // against a heavy but erratic one). When both are neutral, counter the opponent's visible style (balance
-            // grid): attack a passive opponent, stay balanced against an aggressive one. A style the opponent took only
-            // at the last changeover is not countered yet: the human decides after this coach, so countering it at once
-            // would let them switch again and punish the counter.
+            // grid): attack a passive opponent, stay balanced against an aggressive one. A style the opponent took at the
+            // last changeover is countered at once unless the opponent keeps switching: the human decides after this
+            // coach, so countering every switch would let them switch again and punish the counter.
             var mine = players[self]; var opp = players[other];
             var own = AggressionByPoint(record, self, toPoint);
             var theirs = AggressionByPoint(record, other, toPoint);
             var shown = current[other].Aggression;
+            // The opponent took its current aggression at the last changeover.
+            bool switched = fromPoint > 1 && theirs[fromPoint - 1] != shown;
             double power = (mine.ForehandPower + mine.BackhandPower) / 2, control = (mine.ForehandControl + mine.BackhandControl) / 2;
             double oppPower = (opp.ForehandPower + opp.BackhandPower) / 2, oppControl = (opp.ForehandControl + opp.BackhandControl) / 2;
             int selfLean = control - power > SelfGap ? 1 : power - control > SelfGap ? -1 : 0;
@@ -263,7 +282,7 @@ namespace TennisSim.Core
                     ? new CoachReason { Kind = CoachReasonKind.SelfScouting, To = next.Aggression, A = power, B = control }
                     : new CoachReason { Kind = CoachReasonKind.OpponentScouting, To = next.Aggression, A = oppPower, B = oppControl };
             }
-            else if (fromPoint > 1 && theirs[fromPoint - 1] != shown)
+            else if (switched && Shaking(record, theirs, fromPoint, toPoint))
             { next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.HoldStyle }; }
             else switch (shown)
             {
@@ -271,6 +290,7 @@ namespace TennisSim.Core
                 case Aggression.Aggressive: next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.CounterAggressive }; break;
                 default: next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.NeutralStyle }; break;
             }
+            bool watching = lean == 0 && switched && aggression.Kind == CoachReasonKind.HoldStyle;
 
             // Scouting is only a starting point, so the coach also measures: own point share per own style, over the
             // points where the opponent played its current style.
@@ -315,7 +335,25 @@ namespace TennisSim.Core
             if (next.Target != current[self].Target) decision.Reasons.Add(target!);
             if (next.Aggression != current[self].Aggression) decision.Reasons.Add(aggression!);
             if (next.Serve != current[self].Serve) decision.Reasons.Add(serve!);
-            return decision.Reasons.Count > 0 ? decision : null;
+            // The opponent changed its style and this coach's aggression stays: say that it was seen.
+            if (switched && next.Aggression == current[self].Aggression)
+                decision.Notes.Add(watching
+                    ? new CoachReason { Kind = CoachReasonKind.WatchingStyle, From = shown }
+                    : new CoachReason { Kind = CoachReasonKind.KeepStyle, From = shown, To = next.Aggression, A = lean != 0 ? 1 : 0 });
+            return decision;
+        }
+
+        // The opponent keeps changing its aggression: it also changed it at one of the HoldWindow changeovers before the
+        // last one. Only then is a new style held for a segment; a first or rare change is countered at once.
+        static bool Shaking(MatchRecord record, Aggression[] theirs, int fromPoint, int toPoint)
+        {
+            var starts = new List<int> { 1 };
+            foreach (var e in record.Events) if (e.Kind == "EndsChanged" && e.Point < toPoint && !starts.Contains(e.Point + 1)) starts.Add(e.Point + 1);
+            int k = starts.IndexOf(fromPoint);
+            if (k < 0) return false;
+            for (int i = Math.Max(1, k - HoldWindow); i < k; i++)
+                if (theirs[starts[i] - 1] != theirs[starts[i]]) return true;
+            return false;
         }
 
         // The aggression a player used in each point 1..toPoint (index 0 unused), from the input and the applied

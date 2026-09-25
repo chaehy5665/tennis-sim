@@ -32,6 +32,8 @@ namespace TennisSim.Coach
         public Tactic TacticA;
         public Tactic TacticB;
         public CoachDecision OpponentChangeAtEnd;
+        // What the opponent coach noticed at the end without changing its tactic (notes only), or null.
+        public CoachDecision OpponentNoteAtEnd;
     }
 
     // Drives one coached set: pre-match tactic, play until each changeover, take the user's change, finish.
@@ -48,6 +50,8 @@ namespace TennisSim.Coach
         public CoachSegment Current => Segments.Count == 0 ? null : Segments[Segments.Count - 1];
         // The opponent's change taken at the current changeover, or null.
         public CoachDecision OpponentChange { get; private set; }
+        // What the opponent coach noticed at the current changeover while keeping its tactic (notes only), or null.
+        public CoachDecision OpponentNote { get; private set; }
         double pendingTicks;
         int scanned;
         int[] games = new int[2];
@@ -97,6 +101,7 @@ namespace TennisSim.Coach
             var nextB = OpponentChange != null ? OpponentChange.Tactic.Copy() : now[1].Copy();
             Segments.Add(new CoachSegment { FromPoint = Current.ToPoint + 1, FirstGame = Current.LastGame + 1, TacticA = nextA, TacticB = nextB });
             OpponentChange = null;
+            OpponentNote = null;
             Phase = CoachPhase.Playing;
         }
 
@@ -111,11 +116,15 @@ namespace TennisSim.Coach
                 var state = Engine.State;
                 Current.ToPoint = state.Score.PointsPlayed;
                 Current.LastGame = state.Score.Games[0] + state.Score.Games[1];
-                OpponentChange = AdaptiveOpponent
-                    ? OpponentCoach.DecideWithReasons(1, Engine.Record, Current.FromPoint, Current.ToPoint, state.Tactics, Input.Players)
+                var assessed = AdaptiveOpponent
+                    ? OpponentCoach.Assess(1, Engine.Record, Current.FromPoint, Current.ToPoint, state.Tactics, Input.Players)
                     : null;
+                // Only a real change is queued; a note alone leaves the record untouched.
+                OpponentChange = assessed != null && assessed.Changed ? assessed : null;
+                OpponentNote = assessed != null && !assessed.Changed && assessed.Notes.Count > 0 ? assessed : null;
                 if (OpponentChange != null) Engine.QueueTactics(1, OpponentChange.Tactic);
                 Current.OpponentChangeAtEnd = OpponentChange;
+                Current.OpponentNoteAtEnd = OpponentNote;
                 Phase = CoachPhase.Changeover;
             }
             else if (stop == ChangeoverStop.Finished)

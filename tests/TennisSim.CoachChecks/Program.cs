@@ -186,8 +186,37 @@ Test("Opponent-coach style reasons read as sentences with their numbers", () =>
     Check(CoachText.Reason(light, "Moss") == "Moss의 공이 가벼워(파워 0.45) 공격합니다.", CoachText.Reason(light, "Moss"));
     var heavy = new CoachReason { Kind = CoachReasonKind.OpponentScouting, To = Aggression.Safe, A = .935, B = .65 };
     Check(CoachText.Reason(heavy, "Blaze") == "Blaze의 공이 무겁지만(파워 0.94) 컨트롤(0.65)이 낮아 안전하게 버팁니다.", CoachText.Reason(heavy, "Blaze"));
+    var watch = new CoachReason { Kind = CoachReasonKind.WatchingStyle, From = Aggression.Safe };
+    Check(CoachText.Reason(watch, "Ember") == "Ember 선수가 또 안전으로 바꿨습니다. 한 구간 더 지켜봅니다.", CoachText.Reason(watch, "Ember"));
+    var keepScout = new CoachReason { Kind = CoachReasonKind.KeepStyle, From = Aggression.Safe, To = Aggression.Aggressive, A = 1 };
+    Check(CoachText.Reason(keepScout, "Ember") == "Ember 선수가 안전으로 바꾼 것을 봤습니다. 우리 선수에게 맞는 공격을 유지합니다.", CoachText.Reason(keepScout, "Ember"));
+    var keepRule = new CoachReason { Kind = CoachReasonKind.KeepStyle, From = Aggression.Aggressive, To = Aggression.Balanced };
+    Check(CoachText.Reason(keepRule, "Ember") == "Ember 선수가 공격으로 바꾼 것을 봤습니다. 지금 균형이 맞는 대응이라 유지합니다.", CoachText.Reason(keepRule, "Ember"));
     foreach (CoachReasonKind kind in Enum.GetValues(typeof(CoachReasonKind)))
         Check(CoachText.Reason(new CoachReason { Kind = kind }, "Ember") != kind.ToString(), "every reason has a sentence: " + kind);
+});
+Test("Mac milestone 2, seed 42: a first switch to Safe is countered at the next changeover; notes never reach the record", () =>
+{
+    // Ember keeps Balanced, then goes Safe at the third changeover, as in the milestone 2 judge game.
+    var s = new CoachSession(Input(42)); s.Start(new Tactic()); int changeover = 0; bool countered = false;
+    while (s.Phase != CoachPhase.Finished)
+    {
+        if (s.Phase != CoachPhase.Changeover) { s.AdvanceToNextStop(); continue; }
+        changeover++;
+        var v = CoachViews.Changeover(s);
+        Check(v.OpponentBanner == (s.OpponentChange != null || s.OpponentNote != null) && (!v.OpponentChanged || v.OpponentBanner), "banner flags");
+        Check(s.OpponentNote == null || (s.OpponentNote.Reasons.Count == 0 && v.OpponentKicker == "Rook 코치가 지켜보고 있습니다" && v.OpponentText.Length > 0 && !v.OpponentText.Contains("백핸드로 받는 공")), "a note is a banner without a change or a direction sentence");
+        if (changeover == 4)
+        {
+            countered = s.OpponentChange != null && s.OpponentChange.Tactic.Aggression == Aggression.Aggressive && s.OpponentChange.Reasons.Any(r => r.Kind == CoachReasonKind.CounterSafe);
+            Check(countered && v.OpponentChanged, "CounterSafe at CO4 after Ember went Safe at CO3");
+        }
+        s.Resume(changeover == 3 ? new Tactic { Aggression = Aggression.Safe } : null);
+    }
+    Check(countered, "the set reached the fourth changeover");
+    var rec = s.Engine.Record;
+    Check(rec.InstructionHistory.Count(i => i.Player == 1) == s.Segments.Count(g => g.OpponentChangeAtEnd != null), "only real changes are recorded");
+    Check(TennisSim.Cli.ReplayJson.Serialize(new MatchEngine(rec.Input).Run()) == TennisSim.Cli.ReplayJson.Serialize(rec), "re-simulates");
 });
 Test("Korean words stay whole: word joiners only around Hangul, never at spaces", () =>
 {

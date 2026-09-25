@@ -534,9 +534,9 @@ Test("Opponent coach: reads scouting and style, consumes no randomness, re-simul
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Coached(5, baseline, new Tactic { Aggression = Aggression.Safe })), "deterministic");
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Run(5, 137, r.Input)), "AI-coached replay re-simulates from its recorded instructions");
 });
-Test("Opponent coach: target needs evidence and hysteresis, aggression starts from scouting, a just-changed style is held, trials keep thresholds", () =>
+Test("Opponent coach: target needs evidence and hysteresis, aggression starts from scouting, a just-changed style is held, trials keep thresholds, notes only without a change", () =>
 {
-    int measured = 0, holds = 0, trials = 0;
+    int measured = 0, holds = 0, trials = 0, notes = 0;
     foreach (var (pa, pb) in new[] { ("touch", "touch"), ("baseline", "retriever"), ("slugger", "slugger"), ("baseline", "backhander") })
         for (uint seed = 1; seed <= 6; seed++)
         {
@@ -548,11 +548,13 @@ Test("Opponent coach: target needs evidence and hysteresis, aggression starts fr
                 var state = engine.State; int to = state.Score.PointsPlayed;
                 var d = OpponentCoach.DecideWithReasons(1, engine.Record, from, to, state.Tactics, input.Players);
                 bool aChanged = from > 1 && engine.Record.InstructionHistory.Any(i => i.Player == 0 && i.AppliedPoint == from);
+                // A switches at every changeover, so from its second switch on it is shaking; its first switch is countered.
+                bool shaking = aChanged && engine.Record.InstructionHistory.Count(i => i.Player == 0 && i.AppliedPoint > 0 && i.AppliedPoint < from) >= 1;
                 foreach (var r in d?.Reasons ?? new List<CoachReason>())
                 {
                     Check(r.Kind != CoachReasonKind.SteadyPlayer, "SteadyPlayer is no longer chosen");
-                    if (aChanged) Check(r.Kind != CoachReasonKind.CounterSafe && r.Kind != CoachReasonKind.CounterAggressive, "a style taken at the last changeover is not countered");
-                    if (r.Kind == CoachReasonKind.HoldStyle) { holds++; Check(aChanged, "hold only after the opponent changed"); }
+                    if (shaking) Check(r.Kind != CoachReasonKind.CounterSafe && r.Kind != CoachReasonKind.CounterAggressive, "a shaking opponent's new style is not countered");
+                    if (r.Kind == CoachReasonKind.HoldStyle) { holds++; Check(shaking, "hold only against a shaking opponent"); }
                     if (r.Kind == CoachReasonKind.TryStyle) { trials++; Check(r.B >= 10 && r.A < .42 && r.From != r.To, "trial thresholds"); }
                     if (r.Kind == CoachReasonKind.MeasuredStyle) { trials++; Check(r.A > r.B + .1 && r.From != r.To, "measured style margin"); }
                     if (r.Kind == CoachReasonKind.SelfScouting || r.Kind == CoachReasonKind.OpponentScouting) Check(r.To != Aggression.Balanced, "scouting leans away from Balanced");
@@ -567,13 +569,21 @@ Test("Opponent coach: target needs evidence and hysteresis, aggression starts fr
                         Check(d!.Tactic.Target == TargetStyle.TargetBackhand ? z > 1 : z < -1, $"target flip inside the hysteresis band: z={z:F2}");
                     }
                 }
+                var assessed = OpponentCoach.Assess(1, engine.Record, from, to, state.Tactics, input.Players);
+                Check(assessed.Changed == (d != null) && (d == null || ReplayJson.Serialize(d.Tactic) == ReplayJson.Serialize(assessed.Tactic)), "Assess agrees with DecideWithReasons");
+                foreach (var n in assessed.Notes)
+                {
+                    notes++;
+                    Check(aChanged && (n.Kind == CoachReasonKind.KeepStyle || shaking), "notes follow the opponent's switch; watching only a shaking one");
+                    Check(assessed.Tactic.Aggression == state.Tactics[1].Aggression, "a note means the aggression stays");
+                }
                 if (d != null) engine.QueueTactics(1, d.Tactic);
                 engine.QueueTactics(0, new Tactic { Aggression = state.Tactics[0].Aggression == Aggression.Safe ? Aggression.Aggressive : Aggression.Safe });
                 from = to + 1;
             }
             Check(ReplayJson.Serialize(engine.Record) == ReplayJson.Serialize(Run(seed, 137, engine.Record.Input)), "re-simulates");
         }
-    Check(measured > 0 && holds > 0 && trials > 0, $"rules exercised: measured {measured}, holds {holds}, trials {trials}");
+    Check(measured > 0 && holds > 0 && trials > 0 && notes > 0, $"rules exercised: measured {measured}, holds {holds}, trials {trials}, notes {notes}");
     // Aggression starts from scouting of both profiles, not from a type name: an accurate player with a light ball
     // attacks, a heavy but erratic hitter plays safe, a neutral pair counters the visible style.
     Aggression FirstStyle(string a, string b, Tactic tacticA)

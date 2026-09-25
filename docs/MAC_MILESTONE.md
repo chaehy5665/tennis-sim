@@ -1,0 +1,77 @@
+# Mac 마일스톤 2 체크리스트 (준비 중)
+
+Linux 우선 개발([PLAYTEST.md](PLAYTEST.md) "개발 흐름")에서는 Unity 확인과 손 플레이를 마일스톤마다 한 번 몰아서 한다.
+이 문서는 마일스톤 2에서 Mac 세션이 위에서부터 따라 할 절차다. 리더가 push한 커밋을 받아 쓴다.
+
+상태: **준비 중.** "대기" 표시 항목이 main에 들어오면 리더가 커밋 번호를 채우고 push한다.
+
+| 들어가는 변경 | 커밋 | Unity 쪽 영향 |
+|---|---|---|
+| 엔진 v5: 받는 선수가 공 옆에 섬 | `3dbe8f6` | ReplayLoader가 v5 허용 |
+| 체인지오버 판단 근거 화면 | `de77f01`, `299c5f3` | 코치 UI 화면 변경 (Coach/Runtime, USS) |
+| 엔진 v6: 서브 위치 읽기, 예정 스트로크 | `bac7ec1` | ReplayLoader가 v6 허용 |
+| 선수 유형 6개 | `b6a4824` | 없음 (Core 프리셋만) |
+| 상대 코치 AI 안정화 | `e195acc` | 새 이유 문장 3개 (CoachText) |
+| 코치 UI 매치업을 `backhander` 프리셋으로 | 대기 (UI 세션) | CoachMatchup, 기록 바이트 동일해야 함 |
+| AI 자기 스카우팅 | 대기 (Debug 세션) | 이유 문장이 늘 수 있음 |
+| 서브 위치 신호 | 대기 (UI·Design 의견) | 서브 코스 패널 |
+
+## 1. 준비와 자동 검증
+
+```bash
+git pull --ff-only
+scripts/sync-core-to-unity.sh
+export UNITY_EDITOR="/Applications/Unity/Hub/Editor/6000.6.0f1/Unity.app/Contents/MacOS/Unity"
+export TENNISSIM_CANDIDATE_REPLAY="$PWD/unity/TennisSim.UnityViewer/Assets/StreamingAssets/Replays/sample-42.json"
+scripts/validate-unity-viewer.sh all
+```
+
+- 컴파일 오류 0, EditMode와 PlayMode 모두 통과, font missing 0.
+- 새 `.meta`가 생기면 커밋 대상으로 보고한다(직접 커밋하지 않음).
+
+## 2. 화면 확인 (1280×800, 필요하면 2x)
+
+기준 캡처는 키 입력 없이 찍는다. 저장 위치는 `artifacts/unity-visual/milestone2-<날짜>/`(Syncthing으로 Linux에 동기화).
+
+판단 근거 화면([UNITY_COACH_UI.md](UNITY_COACH_UI.md) "체인지오버 판단 근거"):
+
+1. 첫 체인지오버(직전 없음)와 두 번째 이후(직전 있음).
+   - SplitBar 두 줄, 공격 방향과 서브 코스 두 패널이 나란히 있는지.
+   - 비교 표 4열과 Badge 머리글, 표 아래 평균 랠리 한 줄.
+   - "참고용" 태그와 흐린 행.
+2. 배너가 있을 때 비교 표 아래쪽 스크롤.
+3. 버튼 전환: 칩을 바꾸면 "변경 취소"와 "적용하고 계속", "변경 취소"를 누르면 "그대로 계속" 하나로 돌아오는지.
+4. 리뷰의 "상대 코치의 변경" 패널.
+5. 히트맵 필터 칩 전환, 범례 숫자, 점에 선수 색이 없는지.
+
+상대 코치 AI 문장([BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md) "상대 코치 AI 평가"):
+
+6. Safe로 시작하면 첫 체인지오버에 공격 전환 배너(CounterSafe)가 나오는지.
+7. 경기 중 새 문장 세 종류가 잘리지 않고 나오는지. 나오지 않은 문장은 "안 나옴"으로 적는다.
+   - HoldStyle: "… 선수가 방금 공격성을 바꿔, 한 구간 균형으로 지켜봅니다."
+   - TryStyle: "균형으로 38%(13포인트)에 그쳐 공격을 한 구간 시험합니다." 같은 형식
+   - MeasuredStyle: "시험해 보니 안전이 55%로 균형 38%보다 나아 안전으로 갑니다." 같은 형식
+
+## 3. 손 플레이 테스트 (마일스톤 1과 같은 절차)
+
+마일스톤 1([GAME_LOOP.md](GAME_LOOP.md) "플레이 테스트")과 비교할 수 있게 같은 방식으로 한다.
+
+- Ember 대 Rook(AI 코칭). seed 3, 7, 42 각각 "고정"(균형 끝까지)과 "판단"(체인지오버마다 화면만 보고 결정), seed 3에서
+  강한 조합(백핸드 공략 + 공격 + Wide) 한 번. 모두 7경기.
+- "판단" 경기는 결정마다 한 줄: 무엇을 보고, 무엇으로, 왜. **이번에는 그 근거가 어느 패널에서 왔는지도 적는다**
+  (공격 방향, 서브 코스, 비교 표, 상대 코치 배너, 없음).
+- 같은 seed와 같은 선택이면 결과가 같아야 한다. 다르면 그것부터 보고한다.
+
+## 4. 보고
+
+"leader" 세션으로 보낸다.
+
+1. 자동 검증 결과와 새 `.meta` 목록.
+2. 화면 확인 7항목의 통과/실패와 캡처 파일 이름.
+3. 경기별 표(seed, 방식, 최종 점수, 포인트, 체인지오버 수, 내 변경, 상대 변경).
+4. 결정 로그 전체.
+5. 판정(재미있다 / 애매하다 / 재미없다)과 근거. 마일스톤 1의 네 항목(근거, 효과, 상대, 긴장)으로 쓰고, 마일스톤 1과
+   무엇이 달라졌는지 적는다. 관찰과 추측을 나눈다.
+6. 불편했던 UX 목록(고치지 말고 기록만).
+
+코드 수정, 커밋, push는 하지 않는다. 끝나면 Unity Editor를 닫고 작업 트리를 깨끗하게 둔다.

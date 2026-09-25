@@ -3,7 +3,7 @@
 Linux 우선 개발([PLAYTEST.md](PLAYTEST.md) "개발 흐름")에서는 Unity 확인과 손 플레이를 마일스톤마다 한 번 몰아서 한다.
 이 문서는 마일스톤 2에서 Mac 세션이 위에서부터 따라 할 절차다. 리더가 push한 커밋을 받아 쓴다.
 
-상태: **준비 완료.** 모든 변경이 main에 있다. 리더가 push하면 시작한다.
+상태: **완료 (2026-09-25, `d7f744f`).** 결과는 [GAME_LOOP.md](GAME_LOOP.md) "플레이 테스트 2". `cf913dc`에서는 Runtime 컴파일 오류(HalfCourtView.Set 누락)로 멈췄고 `d7f744f`에서 고쳤다.
 
 | 들어가는 변경 | 커밋 | Unity 쪽 영향 |
 |---|---|---|

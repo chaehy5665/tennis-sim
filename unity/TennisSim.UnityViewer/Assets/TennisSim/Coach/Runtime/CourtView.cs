@@ -103,22 +103,24 @@ namespace TennisSim.Coach
         }
     }
 
-    // One player's first landings on the opponent's half, net at the bottom. Hitter's colour filled = backhand-target
-    // shot, line-muted ring = other shot, line ring = out (design system v2 heatmap rule).
+    // One player's first landings on the opponent's half, net at the bottom. Line-muted fill = backhand-target shot,
+    // line-muted ring = other shot, line ring = out; no player colours (design system v25 heatmap rule).
     public sealed class HalfCourtView : VisualElement
     {
-        readonly List<Landing> landings;
-        readonly Color hitter;
-        // Net to 1.6 m past the baseline and 1.4 m past each sideline, widened when a landing falls further out.
+        List<Landing> landings;
+        // Net to 1.6 m past the baseline and 1.4 m past each sideline, widened when a landing falls further out. The
+        // span comes from every landing given at construction, so a filtered view keeps the same scale.
         readonly float spanX = 5.5f, spanZ = 13.5f;
 
-        public HalfCourtView(List<Landing> landings, int player = 0)
+        public HalfCourtView(List<Landing> landings)
         {
             this.landings = landings;
-            hitter = player == 0 ? CourtPaint.PlayerA : CourtPaint.PlayerB;
             foreach (var l in landings) { spanX = Mathf.Max(spanX, Mathf.Abs(l.X) + .5f); spanZ = Mathf.Max(spanZ, l.Z + .5f); }
             generateVisualContent += Draw;
         }
+
+        // Shows a subset of the landings (a heatmap filter) at the scale of the full list.
+        public void Set(List<Landing> shown) { landings = shown; MarkDirtyRepaint(); }
 
         Vector2 Map(float x, float z, Rect r) => new Vector2(r.xMin + (x + spanX) / (2 * spanX) * r.width, r.yMin + (spanZ - z) / spanZ * r.height);
 
@@ -138,7 +140,8 @@ namespace TennisSim.Coach
             {
                 var c = Map(l.X, l.Z, r);
                 if (!l.In) CourtPaint.Dot(p, c, 4, Color.clear, CourtPaint.Line, 1.5f);
-                else if (l.BackhandTarget) CourtPaint.Dot(p, c, 4, hitter, hitter, 0);
+                // Neutral fill, never a player colour: the tactic relation is shown by the filter chips, not by colour.
+                else if (l.BackhandTarget) CourtPaint.Dot(p, c, 4, CourtPaint.LineMuted, CourtPaint.LineMuted, 0);
                 else CourtPaint.Dot(p, c, 4, Color.clear, CourtPaint.LineMuted, 1.5f);
             }
         }

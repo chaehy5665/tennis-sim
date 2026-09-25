@@ -10,8 +10,8 @@ public static class Playtest
 {
     public sealed record PolicyRow(string PlayerA, string PlayerB, string Policy, int Sets, int SetsWonA, int PointsWonA,
         int Points, int ChangesA, int ChangesB, int TargetChangesB, int SetsWithTargetReversalB, int Failures);
-    // One changeover: what A changed and how the following segment differed from the one before it.
-    public sealed record Shift(string Axis, string Change, double Before, double After, int PointsBefore, int PointsAfter);
+    // One changeover: what A's policy changed and how the following segment differed from the one before it.
+    public sealed record Shift(string Policy, string Axis, string Change, double Before, double After, int PointsBefore, int PointsAfter);
     public sealed record Result(List<PolicyRow> Rows, List<Shift> Shifts, List<int> SegmentPoints);
 
     // Target x aggression x serve: every tactic a coach can pick at a changeover.
@@ -63,7 +63,7 @@ public static class Playtest
                         foreach (var (axis, change) in pending)
                         {
                             // A segment without serves or B strokes has no value on that axis.
-                            var shift = Measure(axis, change, previous, segment);
+                            var shift = Measure(policy, axis, change, previous, segment);
                             if (!double.IsNaN(shift.Before) && !double.IsNaN(shift.After)) shifts[j].Add(shift);
                         }
                     var b = OpponentCoach.Decide(1, engine.Record, from, to, state.Tactics, input.Players);
@@ -102,7 +102,7 @@ public static class Playtest
 
     // The number a coach would watch for each axis: B's backhand share for A's target, the mean rally length for A's
     // aggression, A's serve points won share for A's serve direction.
-    static Shift Measure(string axis, string change, SegmentStats before, SegmentStats after)
+    static Shift Measure(string policy, string axis, string change, SegmentStats before, SegmentStats after)
     {
         double Value(SegmentStats s) => axis switch
         {
@@ -110,7 +110,7 @@ public static class Playtest
             "aggression" => s.MeanRallyLength,
             _ => Share(s.Players[0].ServePointsWon, s.Players[0].ServePoints)
         };
-        return new Shift(axis, change, Value(before), Value(after), before.Points, after.Points);
+        return new Shift(policy, axis, change, Value(before), Value(after), before.Points, after.Points);
     }
     static double Share(int k, int n) => n == 0 ? double.NaN : (double)k / n;
 

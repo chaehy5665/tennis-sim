@@ -256,6 +256,8 @@ namespace TennisSim.Coach
                 view.OpponentChanged = true;
                 view.OpponentKicker = names[1] + " 코치가 전술을 바꿨습니다";
                 view.OpponentText = ChangeParts(state.Tactics[1], change.Tactic) + " (다음 포인트부터). " + ChangeReasons(change, names);
+                var effect = DirectionEffect(state.Tactics[1], change.Tactic, names[0]);
+                if (effect != null) view.OpponentText += " " + effect;
             }
             int prevIndex = session.Segments.Count - 2;
             var prev = prevIndex >= 0 ? SegmentStats.Compute(session.Engine.Record, session.Segments[prevIndex].FromPoint, session.Segments[prevIndex].ToPoint) : null;
@@ -271,6 +273,14 @@ namespace TennisSim.Coach
         public const int MinPoints = 6, MinShots = 12;
 
         public static string ChangeParts(Tactic before, Tactic after) => string.Join(", ", ChangeList(before, after));
+        // What an opponent's attack-direction change does to my player, and where to see it (changeover.md "상대가 공격
+        // 방향을 바꿀 때의 배너 문장"). No advice: no single answer fits every opponent. Null when the direction is kept.
+        public static string DirectionEffect(Tactic before, Tactic after, string me)
+        {
+            if (before.Target == after.Target) return null;
+            string more = after.Target == TargetStyle.TargetBackhand ? "늘어납니다" : "줄어듭니다";
+            return "이제 " + me + "가 백핸드로 받는 공이 " + more + ". 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
+        }
         static string ChangeReasons(CoachDecision change, string[] names) => string.Join(" ", change.Reasons.Select(r => CoachText.Reason(r, names[0])));
 
         static string Count(int k, int n) => n == 0 ? CoachText.None : CoachText.Ratio(k, n);
@@ -373,6 +383,8 @@ namespace TennisSim.Coach
             panel.Rows.Add(R("서브 득점", (x, p) => Count(p.ServePointsWon, p.ServePoints)));
             panel.Rows.Add(R("첫 서브 성공", (x, p) => Count(p.FirstServesIn, p.ServePoints)));
             panel.Rows.Add(R("위너", (x, p) => p.Winners.ToString()));
+            // Rally strokes each player hit: an opponent aiming at my backhand shows here, beside the errors below.
+            panel.Rows.Add(R("타구 포핸드/백핸드", (x, p) => p.Forehands + "/" + p.Backhands));
             panel.Rows.Add(R("에러 포핸드/백핸드", (x, p) => p.ForehandErrors + "/" + p.BackhandErrors));
             // Energy at the end of a segment is back near 1 (recovery between points), so the row shows the lowest.
             panel.Rows.Add(R("체력(구간 최저)", (x, p) => p.EnergyMin < 0 ? CoachText.None : CoachText.Fixed(p.EnergyMin, 2)));

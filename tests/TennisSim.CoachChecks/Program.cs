@@ -234,11 +234,14 @@ Test("Changeover evidence: panels follow the segment stats, previous columns app
         Check(v.Serve.Columns.SequenceEqual(new[] { "첫 서브", "득점" }) && v.Serve.Compact, "serve course columns");
         Check(v.Serve.Rows[0].Values.SequenceEqual(me.WideServe.Points == 0 ? new[] { "—", "—" } : new[] { me.WideServe.FirstServesIn + "/" + me.WideServe.Points, me.WideServe.Won + "/" + me.WideServe.Points }), "serve ratios as k/n");
         Check(v.Serve.Rows.All(r => !r.Values.Any(x => x.Contains("%"))), "no percent in serve course");
-        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Select(r => r.Label).SequenceEqual(new[] { "득점", "서브 득점", "첫 서브 성공", "위너", "에러 포핸드/백핸드", "체력(구간 최저)" }));
+        Check(v.Compare.SampleTag == (now.Points < CoachViews.MinPoints) && v.Compare.Rows.Select(r => r.Label).SequenceEqual(new[] { "득점", "서브 득점", "첫 서브 성공", "위너", "타구 포핸드/백핸드", "에러 포핸드/백핸드", "체력(구간 최저)" }));
         string rally = CoachText.Fixed(now.MeanRallyLength, 1) + "구";
         var note = v.Compare.Notes[0].Text;
         Check(i == 0 ? note == "평균 랠리 · 이번 " + rally : note.StartsWith("평균 랠리 · 직전 ") && note.EndsWith(" → 이번 " + rally), note);
-        Check(v.Compare.Rows[5].Values[^1] == CoachText.Fixed(now.Players[1].EnergyMin, 2), "lowest energy, two decimals");
+        Check(v.Compare.Rows[6].Values[^1] == CoachText.Fixed(now.Players[1].EnergyMin, 2), "lowest energy, two decimals");
+        var strokes = v.Compare.Rows[4];
+        Check(strokes.Values[strokes.Values.Length / 2 - 1] == me.Forehands + "/" + me.Backhands && strokes.Values[^1] == opp.Forehands + "/" + opp.Backhands, "strokes row: this segment's rally strokes per player");
+        Check(strokes.Muted == v.Compare.SampleTag, "strokes row follows the panel's muting");
         Check(v.Compare.Notes[1].Text == "가장 지쳤을 때 최고 속도 · " + s.Input.Players[0].Name + " " + CoachViews.SpeedLoss(s.Input.Players[0], now.Players[0].EnergyMin) + " · " + s.Input.Players[1].Name + " " + CoachViews.SpeedLoss(s.Input.Players[1], now.Players[1].EnergyMin), v.Compare.Notes[1].Text);
         Check(v.Compare.Notes.All(x => x.Muted), "context lines under the comparison are muted");
         // One muting rule: a tagged panel mutes every value; an untagged panel mutes only rows below their sample.
@@ -517,6 +520,32 @@ Test("A tagged serve panel mutes the segment group but not a match group with it
     Check(!p.Rows[0].MatchMuted && p.Rows[0].MatchValues[0] == "10/10", "wide: 10 match points, not muted by the segment tag");
     Check(p.Rows[2].MatchMuted, "T: 3 match points, muted by its own sample");
     Check(!p.Rows[1].MatchMuted && p.Rows[1].MatchValues[0] == "—", "body: unused, a dash, not muted");
+});
+Test("Opponent attack-direction change: one effect sentence in the banner, no advice", () =>
+{
+    string More(string me) => "이제 " + me + "가 백핸드로 받는 공이 늘어납니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
+    string Fewer(string me) => "이제 " + me + "가 백핸드로 받는 공이 줄어듭니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
+    var both = new Tactic(); var bh = new Tactic { Target = TargetStyle.TargetBackhand };
+    Check(CoachViews.DirectionEffect(both, bh, "Ember") == More("Ember"), "to backhand targeting");
+    Check(CoachViews.DirectionEffect(bh, both, "Ember") == Fewer("Ember"), "back to both sides");
+    Check(CoachViews.DirectionEffect(both, new Tactic { Aggression = Aggression.Aggressive, Serve = ServeDirection.T }, "Ember") == null, "aggression and serve only: no sentence");
+    Check(CoachViews.DirectionEffect(bh, new Tactic { Target = TargetStyle.TargetBackhand, Aggression = Aggression.Safe }, "Ember") == null, "direction kept: no sentence");
+    // In coached sessions: the sentence appears exactly once in a banner that changes the direction, never otherwise.
+    int withEffect = 0, banners = 0;
+    foreach (uint seed in new uint[] { 3, 7, 42 })
+    {
+        var views = new List<ChangeoverView>(); var s = Play(seed, 0, views);
+        foreach (var v in views.Where(v => v.OpponentChanged))
+        {
+            banners++;
+            int count = (v.OpponentText.Length - v.OpponentText.Replace("구간 비교 표의 타구 포핸드/백핸드", "").Length) / "구간 비교 표의 타구 포핸드/백핸드".Length;
+            bool direction = v.OpponentText.StartsWith("공격 방향 ");
+            Check(count == (direction ? 1 : 0), v.OpponentText);
+            if (direction) { withEffect++; Check(v.OpponentText.EndsWith(v.OpponentText.Contains("→ 백핸드 공략") ? More(v.Names[0]) : Fewer(v.Names[0])), v.OpponentText); }
+        }
+    }
+    Console.WriteLine("  banners " + banners + ", with the direction sentence " + withEffect);
+    Check(withEffect > 0, "a coached session changes the opponent's direction at least once");
 });
 Test("Chip descriptions: one source for pre-match and changeover, serve lean named for wide and T", () =>
 {

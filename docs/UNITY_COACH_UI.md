@@ -297,3 +297,16 @@ Mac에서 볼 항목은 [MAC_MILESTONE.md](MAC_MILESTONE.md) "마일스톤 3 확
 - 칩 설명: 경기 전 칩과 체인지오버 설명 상자가 `CoachViews.TacticGroups` 한 곳의 문장을 쓴다. 체인지오버 칩은 설명을
   칩 안에 넣지 않고 상자에만 보인다(마우스 → 포커스 → 마지막 클릭 순).
 - 변경 요약과 상대 코치 배너, 리뷰의 변경 목록에서 서브 축 이름을 칩 묶음과 같은 "서브 코스"로 바꿨다.
+
+## 상대 공격 방향 변경의 결과 문장 (2026-09-25, 브랜치 team/backhand-banner, Mac 확인 NOT_RUN)
+
+디자인 시스템 v41 changeover.md "상대가 공격 방향을 바꿀 때의 배너 문장"과 "3. 공격성 · 구간 비교 표"다. 근거는
+[BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md) "백핸드 공략 대응 검토": 상대가 백핸드를 노려도 Ember의 최선 전술은 그대로라
+배너는 대응을 권하지 않고, 무엇이 달라지는지와 어디서 확인하는지만 말한다.
+
+- 비교 표에 "타구 포핸드/백핸드" 행(`SegmentStats`의 선수별 `Forehands`/`Backhands`)을 "에러 포핸드/백핸드" 바로 위에
+  둔다. 흐림은 다른 행과 같다(패널 태그를 따름).
+- `CoachViews.DirectionEffect(before, after, 내 선수 이름)`: 상대의 공격 방향이 바뀌면 "이제 Ember가 백핸드로 받는 공이
+  늘어납니다/줄어듭니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.", 그대로면 null. 배너 본문
+  (`ChangeoverView.OpponentText`)의 이유 문장 뒤에 한 번 붙는다. CoachText는 바꾸지 않았다. 리뷰의 "상대 코치의 변경"
+  목록에는 붙이지 않는다(명세가 배너만 정함).

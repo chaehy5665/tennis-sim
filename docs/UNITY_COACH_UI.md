@@ -310,3 +310,11 @@ Mac에서 볼 항목은 [MAC_MILESTONE.md](MAC_MILESTONE.md) "마일스톤 3 확
   늘어납니다/줄어듭니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.", 그대로면 null. 배너 본문
   (`ChangeoverView.OpponentText`)의 이유 문장 뒤에 한 번 붙는다. CoachText는 바꾸지 않았다. 리뷰의 "상대 코치의 변경"
   목록에는 붙이지 않는다(명세가 배너만 정함).
+
+## 상대 코치 메모 배너 (2026-09-25, 브랜치 team/note-banner, Mac 확인 NOT_RUN)
+
+상대 AI 반응성 작업(`162ec94`, [BALANCE_DIAGNOSIS.md](BALANCE_DIAGNOSIS.md) "반응성")으로 상대 코치가 전술을 바꾸지 않을
+때도 메모를 남긴다. Runtime 배너 조건을 `ChangeoverView.OpponentChanged`에서 `OpponentBanner`(변경 또는 메모)로 바꿔,
+메모만 있는 체인지오버에도 같은 InfoBanner(머리말 `OpponentKicker` "Rook 코치가 지켜보고 있습니다", 본문 `OpponentText`)가
+나온다. 디자인 시스템 InfoBanner 규칙(머리말 + 한두 문장) 그대로라 새 모양이나 클래스는 없다. 방향 결과 문장은 변경
+배너에만 붙는다. 리뷰 화면에는 아직 메모를 남기지 않는다.

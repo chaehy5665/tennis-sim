@@ -420,7 +420,9 @@ namespace TennisSim.Coach
             main.AddToClassList("tsc-changeover");
             main.Add(Text(v.Heading, "tsc-label", "tsc-on-ground-muted"));
             main.Add(Row(Badge(0), Text(v.Names[0] + " " + v.Games[0] + " – " + v.Games[1] + " " + v.Names[1], "tsc-headline"), Badge(1, true)));
-            if (v.OpponentChanged)
+            // One InfoBanner for the opponent coach: a change ("… 코치가 전술을 바꿨습니다") or, without a change, a note on
+            // the user's change ("… 코치가 지켜보고 있습니다"). Same component, kicker and body either way.
+            if (v.OpponentBanner)
             {
                 var banner = Box("tsc-banner"); banner.style.marginTop = 16;
                 // A symbol, not a label: no uppercase. Size in USS, weight from the Bold file.

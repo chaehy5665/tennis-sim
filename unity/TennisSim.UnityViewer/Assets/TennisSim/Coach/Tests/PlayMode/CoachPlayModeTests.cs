@@ -52,5 +52,30 @@ namespace TennisSim.Coach.Tests
             Assert.That(app.Session.Engine.Record.Status, Is.EqualTo("Completed"));
             Object.Destroy(host);
         }
+
+        // Without a change, the opponent coach's note on the user's change is the same InfoBanner with its own kicker
+        // (seed 42: Aggressive at the first changeover gives a note-only banner at the second, CoachChecks).
+        [UnityTest]
+        public IEnumerator NoteOnlyBannerShowsAtTheSecondChangeover()
+        {
+            var host = new GameObject("CoachNoteTest");
+            var app = host.AddComponent<CoachApp>();
+            app.Seed = 42;
+            yield return null;
+            app.StartMatch(new Tactic());
+            yield return null;
+            app.SkipToNextStop();
+            yield return null;
+            Assert.That(app.Session.Phase, Is.EqualTo(CoachPhase.Changeover));
+            app.Resume(new Tactic { Aggression = Aggression.Aggressive });
+            yield return null;
+            app.SkipToNextStop();
+            yield return null;
+            Assert.That(app.Session.Phase, Is.EqualTo(CoachPhase.Changeover));
+            Assert.That(app.Session.OpponentChange, Is.Null, "no change at the second changeover");
+            Assert.That(app.Session.OpponentNote, Is.Not.Null, "a note instead");
+            Assert.That(app.Root.Q(className: "tsc-banner"), Is.Not.Null, "the note shows as the InfoBanner");
+            Object.Destroy(host);
+        }
     }
 }

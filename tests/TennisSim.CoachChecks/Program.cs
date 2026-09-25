@@ -595,6 +595,23 @@ Test("Top speed at the lowest energy follows Movement.SpeedLimit as a whole perc
     Check(CoachViews.SpeedLoss(p, .15) == "−17%", CoachViews.SpeedLoss(p, .15));
     Check(CoachViews.SpeedLoss(p, -1) == "—", "no frames");
 });
+Test("Mac milestone 3, seed 42: going Aggressive at CO1 gives note-only banners at CO2 and CO3", () =>
+{
+    // The Mac script for the note banner: Aggressive at the first changeover, back to Balanced at the second.
+    var s = new CoachSession(Input(42)); s.Start(new Tactic()); int co = 0; var notes = new List<int>();
+    while (s.Phase != CoachPhase.Finished)
+    {
+        if (s.Phase != CoachPhase.Changeover) { s.AdvanceToNextStop(); continue; }
+        co++; var v = CoachViews.Changeover(s);
+        if (v.OpponentBanner && !v.OpponentChanged)
+        {
+            notes.Add(co);
+            Check(v.OpponentKicker == "Rook 코치가 지켜보고 있습니다" && !v.OpponentText.Contains("다음 포인트부터"), v.OpponentText);
+        }
+        s.Resume(co == 1 ? new Tactic { Aggression = Aggression.Aggressive } : co == 2 ? new Tactic() : null);
+    }
+    Check(notes.Take(2).SequenceEqual(new[] { 2, 3 }), "note-only banners at " + string.Join(",", notes));
+});
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;
 

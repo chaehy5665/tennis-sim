@@ -154,6 +154,14 @@ Test("Opponent-coach style reasons read as sentences with their numbers", () =>
     Check(CoachText.Reason(tried, "Ember") == "균형으로 38%(13포인트)에 그쳐 공격을 한 구간 시험합니다.", CoachText.Reason(tried, "Ember"));
     var kept = new CoachReason { Kind = CoachReasonKind.MeasuredStyle, From = Aggression.Balanced, To = Aggression.Safe, A = .55, B = .38 };
     Check(CoachText.Reason(kept, "Ember") == "시험해 보니 안전이 55%로 균형 38%보다 나아 안전으로 갑니다.", CoachText.Reason(kept, "Ember"));
+    var slugger = new CoachReason { Kind = CoachReasonKind.SelfScouting, To = Aggression.Safe, A = .935, B = .65 };
+    Check(CoachText.Reason(slugger, "Ember") == "우리 선수는 파워(0.94)에 비해 컨트롤(0.65)이 낮아 안전하게 칩니다.", CoachText.Reason(slugger, "Ember"));
+    var touch = new CoachReason { Kind = CoachReasonKind.SelfScouting, To = Aggression.Aggressive, A = .59, B = .92 };
+    Check(CoachText.Reason(touch, "Ember") == "우리 선수는 컨트롤(0.92)에 비해 파워(0.59)가 약해 먼저 공격합니다.", CoachText.Reason(touch, "Ember"));
+    var light = new CoachReason { Kind = CoachReasonKind.OpponentScouting, To = Aggression.Aggressive, A = .45, B = .88 };
+    Check(CoachText.Reason(light, "Moss") == "Moss의 공이 가벼워(파워 0.45) 공격합니다.", CoachText.Reason(light, "Moss"));
+    var heavy = new CoachReason { Kind = CoachReasonKind.OpponentScouting, To = Aggression.Safe, A = .935, B = .65 };
+    Check(CoachText.Reason(heavy, "Blaze") == "Blaze의 공이 무겁지만(파워 0.94) 컨트롤(0.65)이 낮아 안전하게 버팁니다.", CoachText.Reason(heavy, "Blaze"));
     foreach (CoachReasonKind kind in Enum.GetValues(typeof(CoachReasonKind)))
         Check(CoachText.Reason(new CoachReason { Kind = kind }, "Ember") != kind.ToString(), "every reason has a sentence: " + kind);
 });

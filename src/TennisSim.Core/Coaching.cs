@@ -143,7 +143,9 @@ namespace TennisSim.Core
         ServeRead,              // A = serve points won, B = serve points in the segment
         HoldStyle,              // the opponent changed its aggression at the last changeover; Balanced until it holds
         TryStyle,               // From = the rule's aggression, To = the one tried; A = own point share with From, B = its points
-        MeasuredStyle           // From = the rule's aggression, To = the chosen one; A = own point share with To, B = with From
+        MeasuredStyle,          // From = the rule's aggression, To = the chosen one; A = own point share with To, B = with From
+        SelfScouting,           // To = the style the own profile suggests; A = own mean power, B = own mean control
+        OpponentScouting        // To = the style the opponent's profile suggests; A = its mean power, B = its mean control
     }
     public sealed class CoachReason
     {
@@ -166,12 +168,16 @@ namespace TennisSim.Core
         // Target: measured error rates count only with enough strokes on both sides and enough errors in total. The
         // target then changes only when the rates differ by more than one standard error against the current setting,
         // so a single error cannot flip it back and forth.
-        const int MinStrokes = 12, MinErrors = 6;
+        const int MinStrokes = 12, MinErrors = 8;
         const double SwitchZ = 1.0;
         // Aggression trials: when the rule's style has lost clearly over enough points against the opponent's current
         // style, try each other style for as many points and keep one that measured clearly better.
         const int TrialPoints = 10;
         const double TrialLosing = .42, TrialMargin = .1;
+        // Scouting leans for aggression: mean control over mean power by this much favours attacking, the reverse
+        // favours safety; an opponent below LightBall power invites attack, one above HeavyBall power with control
+        // under Erratic invites safety.
+        const double SelfGap = .15, LightBall = .55, HeavyBall = .85, Erratic = .72;
 
         public static Tactic? Decide(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players) =>
             DecideWithReasons(self, record, fromPoint, toPoint, current, players)?.Tactic;
@@ -205,14 +211,29 @@ namespace TennisSim.Core
                 target = new CoachReason { Kind = CoachReasonKind.TargetScouting, A = p.ForehandPower + p.ForehandControl, B = p.BackhandPower + p.BackhandControl };
             }
 
-            // Counter the opponent's visible style (balance grid): attack a passive opponent, stay balanced against an
-            // aggressive one. A style the opponent took only at the last changeover is not countered yet: the human
-            // decides after this coach, so countering it at once would let them switch again and punish the counter.
-            var mine = players[self];
+            // Aggression starts from scouting, like the target does: the own profile (a heavy but erratic hitter plays
+            // safe, an accurate player with a light ball attacks) and the opponent's (attack a light ball, stay safe
+            // against a heavy but erratic one). When both are neutral, counter the opponent's visible style (balance
+            // grid): attack a passive opponent, stay balanced against an aggressive one. A style the opponent took only
+            // at the last changeover is not countered yet: the human decides after this coach, so countering it at once
+            // would let them switch again and punish the counter.
+            var mine = players[self]; var opp = players[other];
             var own = AggressionByPoint(record, self, toPoint);
             var theirs = AggressionByPoint(record, other, toPoint);
             var shown = current[other].Aggression;
-            if (fromPoint > 1 && theirs[fromPoint - 1] != shown)
+            double power = (mine.ForehandPower + mine.BackhandPower) / 2, control = (mine.ForehandControl + mine.BackhandControl) / 2;
+            double oppPower = (opp.ForehandPower + opp.BackhandPower) / 2, oppControl = (opp.ForehandControl + opp.BackhandControl) / 2;
+            int selfLean = control - power > SelfGap ? 1 : power - control > SelfGap ? -1 : 0;
+            int oppLean = oppPower < LightBall ? 1 : oppPower > HeavyBall && oppControl < Erratic ? -1 : 0;
+            int lean = Math.Sign(selfLean + oppLean);
+            if (lean != 0)
+            {
+                next.Aggression = lean > 0 ? Aggression.Aggressive : Aggression.Safe;
+                aggression = selfLean != 0
+                    ? new CoachReason { Kind = CoachReasonKind.SelfScouting, To = next.Aggression, A = power, B = control }
+                    : new CoachReason { Kind = CoachReasonKind.OpponentScouting, To = next.Aggression, A = oppPower, B = oppControl };
+            }
+            else if (fromPoint > 1 && theirs[fromPoint - 1] != shown)
             { next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.HoldStyle }; }
             else switch (shown)
             {
@@ -221,9 +242,8 @@ namespace TennisSim.Core
                 default: next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.NeutralStyle }; break;
             }
 
-            // The rule does not know which style suits its own player (a slow touch player must attack, a heavy but
-            // erratic hitter must stay safe), so it measures: own point share per own style, over the points where the
-            // opponent played its current style.
+            // Scouting is only a starting point, so the coach also measures: own point share per own style, over the
+            // points where the opponent played its current style.
             var won = new int[3]; var played = new int[3]; string selfId = record.Stats.Players[self].PlayerId;
             foreach (var e in record.Events)
                 if (e.Kind == "PointEnded" && e.Point <= toPoint && theirs[e.Point] == shown)

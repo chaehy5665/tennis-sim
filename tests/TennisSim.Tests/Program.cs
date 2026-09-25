@@ -478,7 +478,7 @@ Test("Opponent coach: reads scouting and style, consumes no randomness, re-simul
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Coached(5, baseline, new Tactic { Aggression = Aggression.Safe })), "deterministic");
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Run(5, 137, r.Input)), "AI-coached replay re-simulates from its recorded instructions");
 });
-Test("Opponent coach: target needs evidence and hysteresis, a just-changed style is held, style trials keep their thresholds", () =>
+Test("Opponent coach: target needs evidence and hysteresis, aggression starts from scouting, a just-changed style is held, trials keep thresholds", () =>
 {
     int measured = 0, holds = 0, trials = 0;
     foreach (var (pa, pb) in new[] { ("touch", "touch"), ("baseline", "retriever"), ("slugger", "slugger"), ("baseline", "backhander") })
@@ -499,6 +499,7 @@ Test("Opponent coach: target needs evidence and hysteresis, a just-changed style
                     if (r.Kind == CoachReasonKind.HoldStyle) { holds++; Check(aChanged, "hold only after the opponent changed"); }
                     if (r.Kind == CoachReasonKind.TryStyle) { trials++; Check(r.B >= 10 && r.A < .42 && r.From != r.To, "trial thresholds"); }
                     if (r.Kind == CoachReasonKind.MeasuredStyle) { trials++; Check(r.A > r.B + .1 && r.From != r.To, "measured style margin"); }
+                    if (r.Kind == CoachReasonKind.SelfScouting || r.Kind == CoachReasonKind.OpponentScouting) Check(r.To != Aggression.Balanced, "scouting leans away from Balanced");
                     if (r.Kind == CoachReasonKind.TargetMeasuredErrors)
                     {
                         measured++;
@@ -506,7 +507,7 @@ Test("Opponent coach: target needs evidence and hysteresis, a just-changed style
                         int errors = o.ForehandErrors + o.BackhandErrors;
                         double pooled = (double)errors / (o.Forehands + o.Backhands);
                         double z = (r.A - r.B) / Math.Sqrt(pooled * (1 - pooled) * (1.0 / o.Forehands + 1.0 / o.Backhands));
-                        Check(errors >= 6 && o.Forehands >= 12 && o.Backhands >= 12, $"measured target with {errors} errors");
+                        Check(errors >= 8 && o.Forehands >= 12 && o.Backhands >= 12, $"measured target with {errors} errors");
                         Check(d!.Tactic.Target == TargetStyle.TargetBackhand ? z > 1 : z < -1, $"target flip inside the hysteresis band: z={z:F2}");
                     }
                 }
@@ -517,11 +518,19 @@ Test("Opponent coach: target needs evidence and hysteresis, a just-changed style
             Check(ReplayJson.Serialize(engine.Record) == ReplayJson.Serialize(Run(seed, 137, engine.Record.Input)), "re-simulates");
         }
     Check(measured > 0 && holds > 0 && trials > 0, $"rules exercised: measured {measured}, holds {holds}, trials {trials}");
-    // High control alone no longer sends a player to Safe: touch against a Balanced opponent stays Balanced at first.
-    var touch = new MatchInput { Seed = 3, Players = new[] { PlayerProfile.Preset("baseline", "A"), PlayerProfile.Preset("touch", "B") } };
-    var te = new MatchEngine(touch); te.AdvanceToChangeover();
-    var first = OpponentCoach.Decide(1, te.Record, 1, te.State.Score.PointsPlayed, te.State.Tactics, touch.Players) ?? te.State.Tactics[1];
-    Check(first.Aggression == Aggression.Balanced, "touch is not sent to Safe by its control");
+    // Aggression starts from scouting of both profiles, not from a type name: an accurate player with a light ball
+    // attacks, a heavy but erratic hitter plays safe, a neutral pair counters the visible style.
+    Aggression FirstStyle(string a, string b, Tactic tacticA)
+    {
+        var input = new MatchInput { Seed = 3, Players = new[] { PlayerProfile.Preset(a, "A"), PlayerProfile.Preset(b, "B") }, Tactics = new[] { tacticA, new Tactic() } };
+        var e = new MatchEngine(input); e.AdvanceToChangeover();
+        return (OpponentCoach.Decide(1, e.Record, 1, e.State.Score.PointsPlayed, e.State.Tactics, input.Players) ?? e.State.Tactics[1]).Aggression;
+    }
+    Check(FirstStyle("baseline", "touch", new Tactic()) == Aggression.Aggressive, "touch: control over power attacks");
+    Check(FirstStyle("baseline", "slugger", new Tactic { Aggression = Aggression.Safe }) == Aggression.Safe, "slugger: power over control stays safe even against Safe");
+    Check(FirstStyle("retriever", "baseline", new Tactic()) == Aggression.Aggressive, "a light-ball opponent is attacked");
+    Check(FirstStyle("slugger", "baseline", new Tactic()) == Aggression.Safe, "a heavy but erratic opponent is played safe");
+    Check(FirstStyle("baseline", "backhander", new Tactic { Aggression = Aggression.Safe }) == Aggression.Aggressive, "neutral scouting counters a Safe opponent");
 });
 Test("Segment energy is the recorded energy after the last point of the range", () =>
 {

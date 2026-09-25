@@ -254,3 +254,28 @@ engine v6부터 서브를 받는 선수는 서버의 최근 서브 코스 쪽으
   서브가 없으면 "—"이다. 글자는 line이고, 내 서브 6포인트 미만이면 line-muted다. 내 리턴 위치 줄은 결정과 이어지지
   않으므로 두지 않는다.
 
+## Linux에서의 Runtime 컴파일 검사 (tests/TennisSim.RuntimeCompileCheck)
+
+`Coach/Runtime`은 원래 Unity Editor(Mac)만 컴파일했다. 그래서 마일스톤 2가 `HalfCourtView.Set` 누락(CS1061)으로
+Mac에서 멈췄다. 이제 이 프로젝트가 `Coach/App`과 `Coach/Runtime` 소스를 Unity 6과 같은 C# 9로, 최소한의
+UnityEngine/UIElements 스텁(`UnityStubs.cs`)에 대고 컴파일한다. 솔루션에 들어 있으므로 `dotnet build TennisSim.sln`이
+매번 이 검사를 한다. cf913dc 소스로 빌드하면 Mac과 같은 CS1061이 Linux에서 난다.
+
+**한계: 스텁은 Unity가 아니다.**
+
+- 잡는 것: 우리 코드끼리의 오류. 없는 멤버를 부르는 경우, 인자 수나 타입이 맞지 않는 경우, 이름 충돌, C# 9에 없는
+  문법, 두 번 이어지는 암시적 변환 같은 것이다.
+- 잡지 못하는 것: Unity API 자체의 오류. 스텁에 Unity에 없는 멤버나 다른 시그니처가 들어 있으면 Linux에서는 통과하고
+  Mac에서 실패한다. 그 밖에 USS 해석, 레이아웃, 폰트, 렌더링 같은 실행 결과도 잡지 못한다.
+- 따라서 **Unity API의 권위는 여전히 Mac 컴파일이다.** Linux 검사가 통과해도 Mac 확인 목록의 컴파일 항목을 빼지 않는다.
+
+스텁에 멤버를 추가하는 규칙:
+
+1. Unity 6 스크립팅 레퍼런스에 실제로 있는 멤버와 시그니처만 넣는다. 반환형, 매개변수, 제네릭 제약, 암시적 변환을
+   포함한다. 확인할 수 없으면 넣지 말고 그 호출을 Mac 확인 목록에 올린다.
+2. 본문은 비워 둔다(컴파일만 하고 실행하지 않는다).
+3. 커밋 메시지에 추가한 멤버를 적는다(예: "stubs: +VisualElement.Children(), +IResolvedStyle.marginLeft"). Mac에서
+   어긋나면 그 목록으로 추적한다.
+
+처음 스텁(3a9259c)이 담은 멤버는 UnityStubs.cs 그대로다. Mac 마일스톤 2까지 실제 Unity에서 컴파일된 호출만 모델로 삼았다.
+

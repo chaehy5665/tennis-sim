@@ -318,3 +318,10 @@ Mac에서 볼 항목은 [MAC_MILESTONE.md](MAC_MILESTONE.md) "마일스톤 3 확
 메모만 있는 체인지오버에도 같은 InfoBanner(머리말 `OpponentKicker` "Rook 코치가 지켜보고 있습니다", 본문 `OpponentText`)가
 나온다. 디자인 시스템 InfoBanner 규칙(머리말 + 한두 문장) 그대로라 새 모양이나 클래스는 없다. 방향 결과 문장은 변경
 배너에만 붙는다. 리뷰 화면에는 아직 메모를 남기지 않는다.
+
+## 리뷰 "경기 전체 기록" 표 (2026-09-25, 브랜치 team/review-table, Mac 확인 NOT_RUN)
+
+디자인 시스템 v46 changeover.md "리뷰 화면: 경기 전체 기록". 체인지오버 비교 표와 같은 행 이름과 순서(더블 폴트만 리뷰에
+더 있음)에 범위만 경기 전체다. "체력(경기 최저)"은 `EnergyMin`(경기 끝 값은 회복 때문에 1 가까이라 쓰지 않는다).
+두 선수에게 같은 평균 랠리는 선수 칸 대신 표 아래 `ReviewView.SummaryNotes` 첫 줄로, 둘째 줄은 체인지오버와 같은
+"가장 지쳤을 때 최고 속도"(`CoachViews.SpeedLoss`)다. 경기 전체는 늘 표본 기준을 넘으므로 흐림과 태그가 없다.

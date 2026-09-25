@@ -106,6 +106,8 @@ namespace TennisSim.Coach
         public List<SegmentRow> Segments;
         public List<int> GameWinners;
         public List<StatRow> Summary;
+        // Body lines under the whole-match table (line-muted): average rally, top speed when most tired.
+        public List<string> SummaryNotes;
         public List<Landing> Landings;
         public int BackhandTargets;
         public int Outs;
@@ -218,25 +220,25 @@ namespace TennisSim.Coach
             };
         }
 
-        // The review's whole-match table. Row names follow the changeover comparison table ("서브 득점", "타구 포핸드/백핸드").
-        static List<StatRow> Rows(SegmentStats s, SegmentStats m)
+        // The review's whole-match table (design system changeover.md "리뷰 화면: 경기 전체 기록"): the changeover
+        // comparison rows in the same order and names, plus double faults, with the range swapped to the whole match.
+        // A whole match is always above the sample thresholds, so nothing is muted.
+        static List<StatRow> Rows(SegmentStats s)
         {
-            StatRow R(string label, Func<SegmentPlayerStats, string> f) => new StatRow { Label = label, A = f(s.Players[0]), B = f(s.Players[1]), MatchA = m == null ? null : f(m.Players[0]), MatchB = m == null ? null : f(m.Players[1]) };
-            var rows = new List<StatRow>
+            StatRow R(string label, Func<SegmentPlayerStats, string> f) => new StatRow { Label = label, A = f(s.Players[0]), B = f(s.Players[1]) };
+            return new List<StatRow>
             {
                 R("득점", p => p.PointsWon.ToString()),
                 R("서브 득점", p => CoachText.Ratio(p.ServePointsWon, p.ServePoints)),
                 R("첫 서브 성공", p => CoachText.Ratio(p.FirstServesIn, p.ServePoints)),
                 R("더블 폴트", p => p.DoubleFaults.ToString()),
                 R("위너", p => p.Winners.ToString()),
+                R("타구 포핸드/백핸드", p => p.Forehands + "/" + p.Backhands),
                 R("에러 포핸드/백핸드", p => p.ForehandErrors + "/" + p.BackhandErrors),
-                R("타구 포핸드/백핸드", p => p.Forehands + "/" + p.Backhands)
+                // Energy at the end is back near 1 (recovery between points), so the row shows the match's lowest.
+                R("체력(경기 최저)", p => p.EnergyMin < 0 ? CoachText.None : CoachText.Fixed(p.EnergyMin, 2))
             };
-            // Energy is a state at the end of the range, so the segment and the match show the same value.
-            rows.Add(new StatRow { Label = "체력", A = Energy(s.Players[0]), B = Energy(s.Players[1]), MatchA = m == null ? null : CoachText.None, MatchB = m == null ? null : CoachText.None });
-            return rows;
         }
-        static string Energy(SegmentPlayerStats p) => p.EnergyAtEnd < 0 ? CoachText.None : CoachText.Fixed(p.EnergyAtEnd, 2);
 
         public static ChangeoverView Changeover(CoachSession session)
         {
@@ -456,12 +458,17 @@ namespace TennisSim.Coach
                 if (p.GamesA > ga) gameWinners.Add(0); else if (p.GamesB > gb) gameWinners.Add(1);
                 ga = p.GamesA; gb = p.GamesB;
             }
-            var summary = Rows(whole, null);
-            summary.Insert(7, new StatRow { Label = "평균 랠리", A = CoachText.Fixed(whole.MeanRallyLength, 1), B = CoachText.Fixed(whole.MeanRallyLength, 1) });
+            var summary = Rows(whole);
+            // Values shared by both players go under the table, in the changeover's order: average rally, then top speed.
+            var summaryNotes = new List<string>
+            {
+                "평균 랠리 · " + CoachText.Fixed(whole.MeanRallyLength, 1) + "구",
+                "가장 지쳤을 때 최고 속도 · " + string.Join(" · ", Enumerable.Range(0, 2).Select(i => session.Input.Players[i].Name + " " + SpeedLoss(session.Input.Players[i], whole.Players[i].EnergyMin)))
+            };
             return new ReviewView
             {
                 Names = names, Games = (int[])record.FinalScore.Games.Clone(), Winner = record.FinalScore.Winner, Points = record.FinalScore.PointsPlayed,
-                Segments = segments, GameWinners = gameWinners, Summary = summary, Landings = Landings(record, 0),
+                Segments = segments, GameWinners = gameWinners, Summary = summary, SummaryNotes = summaryNotes, Landings = Landings(record, 0),
                 OpponentChanges = session.Segments.Where(g => g.OpponentChangeAtEnd != null).Select(g => new OpponentChangeRow
                 {
                     Kicker = "게임 " + g.LastGame + " 뒤", Change = ChangeParts(g.TacticB, g.OpponentChangeAtEnd.Tactic), Reasons = ChangeReasons(g.OpponentChangeAtEnd, names)

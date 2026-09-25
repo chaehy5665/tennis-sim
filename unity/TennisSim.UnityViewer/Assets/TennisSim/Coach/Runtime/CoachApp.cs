@@ -713,6 +713,12 @@ namespace TennisSim.Coach
             table.Add(Text("경기 전체 기록", "tsc-label", "tsc-gap-bottom"));
             table.Add(StatHeader(v.Names, false));
             foreach (var r in v.Summary) table.Add(StatLine(r, false));
+            for (int i = 0; i < v.SummaryNotes.Count; i++)
+            {
+                var note = Text(v.SummaryNotes[i], "tsc-body", "tsc-muted");
+                if (i == 0) note.style.marginTop = 8;
+                table.Add(note);
+            }
             columns.Add(map); columns.Add(table);
             page.Add(columns);
         }

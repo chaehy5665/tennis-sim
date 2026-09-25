@@ -89,10 +89,15 @@ Test("Review view: segment points, game winners and landings agree with the reco
     Check(r.Outs > 0 && r.Outs < r.Landings.Count);
     Check(r.Summary[0].A == rec.Stats.Players[0].PointsWon.ToString());
     // Row names match the changeover comparison table.
+    // Same rows, names and order as the changeover comparison table, plus double faults (design system v46).
     var labels = r.Summary.Select(x => x.Label).ToList();
-    Check(labels.Contains("서브 득점") && labels.Contains("타구 포핸드/백핸드") && !labels.Contains("서브 포인트 획득") && !labels.Contains("타수 포핸드/백핸드"), string.Join(",", labels));
-    var whole = SegmentStats.Compute(rec, 1, rec.FinalScore.PointsPlayed).Players[0];
-    Check(r.Summary.Single(x => x.Label == "타구 포핸드/백핸드").A == whole.Forehands + "/" + whole.Backhands, "strokes over the match");
+    Check(labels.SequenceEqual(new[] { "득점", "서브 득점", "첫 서브 성공", "더블 폴트", "위너", "타구 포핸드/백핸드", "에러 포핸드/백핸드", "체력(경기 최저)" }), string.Join(",", labels));
+    var all = SegmentStats.Compute(rec, 1, rec.FinalScore.PointsPlayed); var whole = all.Players[0];
+    Check(r.Summary[5].A == whole.Forehands + "/" + whole.Backhands, "strokes over the match");
+    Check(r.Summary[7].A == CoachText.Fixed(whole.EnergyMin, 2) && r.Summary[7].B == CoachText.Fixed(all.Players[1].EnergyMin, 2), "lowest energy over the match");
+    Check(r.SummaryNotes.Count == 2 && r.SummaryNotes[0] == "평균 랠리 · " + CoachText.Fixed(all.MeanRallyLength, 1) + "구", r.SummaryNotes[0]);
+    Check(r.SummaryNotes[1] == "가장 지쳤을 때 최고 속도 · Ember " + CoachViews.SpeedLoss(s.Input.Players[0], whole.EnergyMin) + " · Rook " + CoachViews.SpeedLoss(s.Input.Players[1], all.Players[1].EnergyMin), r.SummaryNotes[1]);
+    Console.WriteLine("  sample: " + string.Join(" / ", r.SummaryNotes));
 });
 Test("Match view follows the engine state", () =>
 {
@@ -671,6 +676,7 @@ Test("No particle right after a player name in any coach sentence, for every pre
                 }
                 var r = CoachViews.Review(s);
                 Scan(r.NoOpponentChange, names);
+                foreach (var line in r.SummaryNotes) Scan(line, names);
                 foreach (var c in r.OpponentChanges) { Scan(c.Change, names); Scan(c.Reasons, names); }
             }
     Console.WriteLine("  scanned " + sentences + " sentences for " + names.Count + " names");

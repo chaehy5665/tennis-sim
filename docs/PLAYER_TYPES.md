@@ -208,4 +208,5 @@ balanced 2다. 7종류이고 가장 많은 것도 36개 중 10개(28%)다. v5 �
   거의 반씩 나뉜다.
 - `reader` − 최선 고정은 평균 −8.0%p다. A가 retriever, slugger, touch일 때 −10 ~ −28%p로 크다. `reader`는 상대 코치 AI의
   규칙을 A에게 적용한 것이라, 같은 규칙으로 코칭받는 B도 이 유형들을 잘 다루지 못한다(예: touch 대칭전에서 균형 고정
-  A가 77.6%). AI 규칙은 Debug 세션이 고치고 있다.
+  A가 77.6%). 이후 AI 안정화(`e195acc`, BALANCE_DIAGNOSIS.md "상대 코치 AI 평가")로 touch 대칭전은 46.1%, `reader` − 최선 고정
+  평균은 −5.1%p가 됐다.

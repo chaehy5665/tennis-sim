@@ -457,5 +457,20 @@ baseline +3.4%p, big-server +4.3%p, slugger +1.2%p, 나머지 셋은 0 근처이
 | safe | 45.5 | 47.4 | +2.0 |
 | aggressive | 42.1 | 43.5 | +1.4 |
 
-상대가 백핸드를 노릴 때 가장 좋은 대응은 맞받아 상대 백핸드를 노리는 것(50.4%)이고, 안전은 피해를 흡수한다(+2.0%p).
-플레이어에게 이 대응이 보이도록 칩 설명이나 상대 코치 배너에 한 줄로 알리는 것을 UI·Design 후속 작업으로 둔다.
+이 표는 baseline 대칭전 하나다. 상대 유형별로 다시 재면(Ember 대 6유형, 상대가 균형 또는 백핸드 공략, 각 4,000포인트,
+측정 코드 `artifacts/balance/counter-exp-Program.cs`) **상대가 백핸드를 노려도 Ember의 최선 전술은 바뀌지 않는다.**
+
+| 상대 B | Ember의 최선 (B 균형 / B 백핸드 공략) | 가장 해로운 것 (B 백핸드 공략일 때) |
+|---|---|---|
+| baseline | backhand 52.7 / 50.4 | aggressive 41.8 |
+| backhander (Rook) | balanced 49.4 / 45.0 | backhand-safe 38.7, backhand 42.7 |
+| big-server | backhand 58.5 / 56.3 | aggressive 45.5 |
+| retriever | aggressive 52.7 / 49.1 | backhand-safe 37.2 |
+| slugger | backhand-safe 57.9 / safe·backhand-safe 57.5 | aggressive 43.8 |
+| touch | backhand 53.4 / 49.8 | safe 24.9 |
+
+- 앞의 대칭전에서 보인 "안전이 피해를 흡수한다"는 일반 규칙이 아니다. touch 상대로 안전은 24.9%로 가장 나쁘다.
+- "맞받아 상대 백핸드를 노린다"도 일반 규칙이 아니다. 백핸드가 강한 Rook(코치 UI의 상대)에게는 손해다(42.7% 대 균형 45.0%).
+- 따라서 백핸드 공략에 대한 **처방 문구는 넣지 않는다.** 백핸드 공략은 2~5%p의 비용을 줄 뿐이고, 답은 그 상대에게 맞는 전술
+  그대로다. 상대 코치 배너는 무엇이 달라지는지(백핸드로 받는 공이 늘어남)와 어디서 확인하는지(공격 방향 패널)만 알린다.
+  문구는 Design이 정하고, 구현은 상대 코치 AI 작업(`team/coach-react`)이 병합된 뒤에 한다(CoachText가 겹침).

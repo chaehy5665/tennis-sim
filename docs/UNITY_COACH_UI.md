@@ -306,7 +306,7 @@ Mac에서 볼 항목은 [MAC_MILESTONE.md](MAC_MILESTONE.md) "마일스톤 3 확
 
 - 비교 표에 "타구 포핸드/백핸드" 행(`SegmentStats`의 선수별 `Forehands`/`Backhands`)을 "에러 포핸드/백핸드" 바로 위에
   둔다. 흐림은 다른 행과 같다(패널 태그를 따름).
-- `CoachViews.DirectionEffect(before, after, 내 선수 이름)`: 상대의 공격 방향이 바뀌면 "이제 Ember가 백핸드로 받는 공이
+- `CoachViews.DirectionEffect(before, after, 내 선수 이름)`: 상대의 공격 방향이 바뀌면 "이제 Ember 선수가 백핸드로 받는 공이
   늘어납니다/줄어듭니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.", 그대로면 null. 배너 본문
   (`ChangeoverView.OpponentText`)의 이유 문장 뒤에 한 번 붙는다. CoachText는 바꾸지 않았다. 리뷰의 "상대 코치의 변경"
   목록에는 붙이지 않는다(명세가 배너만 정함).

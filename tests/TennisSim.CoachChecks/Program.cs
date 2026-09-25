@@ -552,8 +552,8 @@ Test("A tagged serve panel mutes the segment group but not a match group with it
 });
 Test("Opponent attack-direction change: one effect sentence in the banner, no advice", () =>
 {
-    string More(string me) => "이제 " + me + "가 백핸드로 받는 공이 늘어납니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
-    string Fewer(string me) => "이제 " + me + "가 백핸드로 받는 공이 줄어듭니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
+    string More(string me) => "이제 " + me + " 선수가 백핸드로 받는 공이 늘어납니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
+    string Fewer(string me) => "이제 " + me + " 선수가 백핸드로 받는 공이 줄어듭니다. 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
     var both = new Tactic(); var bh = new Tactic { Target = TargetStyle.TargetBackhand };
     Check(CoachViews.DirectionEffect(both, bh, "Ember") == More("Ember"), "to backhand targeting");
     Check(CoachViews.DirectionEffect(bh, both, "Ember") == Fewer("Ember"), "back to both sides");
@@ -611,6 +611,64 @@ Test("Mac milestone 3, seed 42: going Aggressive at CO1 gives note-only banners 
         s.Resume(co == 1 ? new Tactic { Aggression = Aggression.Aggressive } : co == 2 ? new Tactic() : null);
     }
     Check(notes.Take(2).SequenceEqual(new[] { 2, 3 }), "note-only banners at " + string.Join(",", notes));
+});
+Test("No particle right after a player name in any coach sentence, for every preset name", () =>
+{
+    // Design system v45: a particle whose form depends on how the name is read (이/가, 은/는, 을/를, 와/과, 로/으로,
+    // 이랑/랑, 이나/나) never follows a name directly. Particles with one form (의, 도, 만, 에게, 에서, 부터, 까지) may.
+    // Checked by the first character after the name; no allowed particle starts with one of these.
+    const string Particles = "이가은는을를와과로으랑나";
+    var presets = new[] { "baseline", "backhander", "server", "defender", "big-server", "retriever", "slugger", "touch" };
+    int sentences = 0;
+    void Scan(string text, IEnumerable<string> names)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        sentences++;
+        foreach (var n in names)
+            for (int i = text.IndexOf(n, StringComparison.Ordinal); i >= 0; i = text.IndexOf(n, i + 1, StringComparison.Ordinal))
+                Check(i + n.Length >= text.Length || Particles.IndexOf(text[i + n.Length]) < 0, "particle after " + n + ": " + text);
+    }
+    var names = presets.Select(p => PlayerProfile.Preset(p, "X").Name).ToList();
+    // The allowed particles pass and every varying one is caught.
+    foreach (var ok in new[] { "의", "도", "만", "에게", "에서", "부터", "까지" }) Check(Particles.IndexOf(ok[0]) < 0, "allowed: " + ok);
+    foreach (var bad in new[] { "이", "가", "은", "는", "을", "를", "와", "과", "로", "으로", "이랑", "랑", "이나", "나" }) Check(Particles.IndexOf(bad[0]) >= 0, "blocked: " + bad);
+    Check(names.Contains("Ember") && names.Contains("Rook") && names.Contains("Wren"), string.Join(",", names));
+    foreach (var p in presets)
+    {
+        var input = new MatchInput { Players = new[] { PlayerProfile.Preset("baseline", "A"), PlayerProfile.Preset(p, "B") } };
+        var pre = CoachViews.PreMatch(input);
+        Scan(pre.ScoutingMemo, names); Scan(pre.OpponentCoachNote, names);
+    }
+    foreach (var n in names)
+    {
+        foreach (CoachReasonKind kind in Enum.GetValues(typeof(CoachReasonKind)))
+            foreach (var to in new[] { Aggression.Safe, Aggression.Balanced, Aggression.Aggressive })
+                foreach (var a in new[] { 0.0, 1.0 })
+                    Scan(CoachText.Reason(new CoachReason { Kind = kind, From = Aggression.Balanced, To = to, A = a, B = .4 }, n), names);
+        Scan(CoachViews.DirectionEffect(new Tactic(), new Tactic { Target = TargetStyle.TargetBackhand }, n), names);
+        Scan(CoachViews.DirectionEffect(new Tactic { Target = TargetStyle.TargetBackhand }, new Tactic(), n), names);
+    }
+    // Whole coached sessions with each pair of names: banners, notes, feed and review.
+    foreach (var (a, b) in new[] { ("baseline", "backhander"), ("touch", "server"), ("big-server", "retriever") })
+        foreach (uint seed in new uint[] { 3, 42 })
+            foreach (int script in new[] { 0, 1 })
+            {
+                var input = new MatchInput { Seed = seed, Players = new[] { PlayerProfile.Preset(a, "A"), PlayerProfile.Preset(b, "B") } };
+                var s = new CoachSession(input); s.Start(new Tactic()); int co = 0;
+                while (s.Phase != CoachPhase.Finished)
+                {
+                    if (s.Phase != CoachPhase.Changeover) { s.AdvanceToNextStop(); continue; }
+                    co++; var v = CoachViews.Changeover(s);
+                    Scan(v.Heading, names); Scan(v.OpponentKicker, names); Scan(v.OpponentText, names);
+                    foreach (var f in CoachViews.Match(s, 20).Feed) Scan(f.Text, names);
+                    s.Resume(script == 0 ? (co == 1 ? new Tactic { Aggression = Aggression.Aggressive } : co == 2 ? new Tactic() : null)
+                                         : (co == 3 ? new Tactic { Aggression = Aggression.Safe, Target = TargetStyle.TargetBackhand } : null));
+                }
+                var r = CoachViews.Review(s);
+                Scan(r.NoOpponentChange, names);
+                foreach (var c in r.OpponentChanges) { Scan(c.Change, names); Scan(c.Reasons, names); }
+            }
+    Console.WriteLine("  scanned " + sentences + " sentences for " + names.Count + " names");
 });
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;

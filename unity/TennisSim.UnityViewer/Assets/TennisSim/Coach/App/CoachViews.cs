@@ -181,12 +181,14 @@ namespace TennisSim.Coach
                     Skill("체력", p.Stamina)
                 };
             }
+            // No particle right after a player name (design system v45 "말투와 표기"): its form depends on how the name is
+            // read (Ember는, Rook은), so sentences say "Rook 선수는".
             var o = input.Players[1];
             double fh = o.ForehandPower + o.ForehandControl, bh = o.BackhandPower + o.BackhandControl;
             string detail = " (파워 " + CoachText.Fixed(o.BackhandPower, 2) + " 대 " + CoachText.Fixed(o.ForehandPower, 2) + ", 정확도 " + CoachText.Fixed(o.BackhandControl, 2) + " 대 " + CoachText.Fixed(o.ForehandControl, 2) + ")";
-            string memo = bh - fh > .1 ? o.Name + "는 백핸드가 포핸드보다 강합니다" + detail + ". 백핸드 공략이 통하지 않을 수 있습니다."
-                : fh - bh > .1 ? o.Name + "는 백핸드가 약점입니다" + detail + "."
-                : o.Name + "는 포핸드와 백핸드가 비슷합니다" + detail + ".";
+            string memo = bh - fh > .1 ? o.Name + " 선수는 백핸드가 포핸드보다 강합니다" + detail + ". 백핸드 공략이 통하지 않을 수 있습니다."
+                : fh - bh > .1 ? o.Name + " 선수는 백핸드가 약점입니다" + detail + "."
+                : o.Name + " 선수는 포핸드와 백핸드가 비슷합니다" + detail + ".";
             return new PreMatchView
             {
                 Names = Names(input), Attributes = new[] { Rows(input.Players[0]), Rows(o) }, ScoutingMemo = memo,
@@ -288,7 +290,7 @@ namespace TennisSim.Coach
         {
             if (before.Target == after.Target) return null;
             string more = after.Target == TargetStyle.TargetBackhand ? "늘어납니다" : "줄어듭니다";
-            return "이제 " + me + "가 백핸드로 받는 공이 " + more + ". 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
+            return "이제 " + me + " 선수가 백핸드로 받는 공이 " + more + ". 구간 비교 표의 타구 포핸드/백핸드에서 확인할 수 있습니다.";
         }
         static string NoteText(CoachDecision d, string[] names) => string.Concat(d.Notes.Select(r => " " + CoachText.Reason(r, names[0])));
         static string ChangeReasons(CoachDecision change, string[] names) => string.Join(" ", change.Reasons.Select(r => CoachText.Reason(r, names[0])));

@@ -137,16 +137,22 @@ namespace TennisSim.Core
         TargetScouting,         // A = opponent forehand power+control, B = backhand power+control
         CounterSafe,            // opponent plays Safe
         CounterAggressive,      // opponent plays Aggressive
-        SteadyPlayer,           // own mean control >= .85 against a Balanced opponent
+        SteadyPlayer,           // no longer chosen: own mean control >= .85 against a Balanced opponent
         NeutralStyle,           // Balanced against a Balanced opponent
         BigServerWide,          // A = own serve power
-        ServeRead               // A = serve points won, B = serve points in the segment
+        ServeRead,              // A = serve points won, B = serve points in the segment
+        HoldStyle,              // the opponent changed its aggression at the last changeover; Balanced until it holds
+        TryStyle,               // From = the rule's aggression, To = the one tried; A = own point share with From, B = its points
+        MeasuredStyle           // From = the rule's aggression, To = the chosen one; A = own point share with To, B = with From
     }
     public sealed class CoachReason
     {
         public CoachReasonKind Kind { get; set; }
         public double A { get; set; }
         public double B { get; set; }
+        // The aggressions a style reason compares (TryStyle, MeasuredStyle).
+        public Aggression From { get; set; }
+        public Aggression To { get; set; }
     }
     public sealed class CoachDecision
     {
@@ -157,7 +163,15 @@ namespace TennisSim.Core
 
     public static class OpponentCoach
     {
-        const int MinStrokes = 12;
+        // Target: measured error rates count only with enough strokes on both sides and enough errors in total. The
+        // target then changes only when the rates differ by more than one standard error against the current setting,
+        // so a single error cannot flip it back and forth.
+        const int MinStrokes = 12, MinErrors = 6;
+        const double SwitchZ = 1.0;
+        // Aggression trials: when the rule's style has lost clearly over enough points against the opponent's current
+        // style, try each other style for as many points and keep one that measured clearly better.
+        const int TrialPoints = 10;
+        const double TrialLosing = .42, TrialMargin = .1;
 
         public static Tactic? Decide(int self, MatchRecord record, int fromPoint, int toPoint, Tactic[] current, PlayerProfile[] players) =>
             DecideWithReasons(self, record, fromPoint, toPoint, current, players)?.Tactic;
@@ -170,13 +184,17 @@ namespace TennisSim.Core
             var segment = SegmentStats.Compute(record, fromPoint, toPoint).Players;
             var next = current[self].Copy();
 
-            // Target the side where the opponent actually errs more; before enough strokes, trust the scouting profile.
+            // Target the side where the opponent actually errs more; before enough evidence, trust the scouting profile.
             var o = match[other];
-            if (o.Forehands >= MinStrokes && o.Backhands >= MinStrokes)
+            int errors = o.ForehandErrors + o.BackhandErrors;
+            if (o.Forehands >= MinStrokes && o.Backhands >= MinStrokes && errors >= MinErrors)
             {
                 double fh = (double)o.ForehandErrors / o.Forehands, bh = (double)o.BackhandErrors / o.Backhands;
-                if (bh > fh * 1.25) next.Target = TargetStyle.TargetBackhand;
-                else if (fh > bh * 1.25) next.Target = TargetStyle.Balanced;
+                double pooled = (double)errors / (o.Forehands + o.Backhands);
+                double se = Math.Sqrt(pooled * (1 - pooled) * (1.0 / o.Forehands + 1.0 / o.Backhands));
+                double z = se > 0 ? (bh - fh) / se : 0;
+                if (current[self].Target == TargetStyle.TargetBackhand) { if (z < -SwitchZ) next.Target = TargetStyle.Balanced; }
+                else if (z > SwitchZ) next.Target = TargetStyle.TargetBackhand;
                 target = new CoachReason { Kind = CoachReasonKind.TargetMeasuredErrors, A = bh, B = fh };
             }
             else
@@ -187,18 +205,52 @@ namespace TennisSim.Core
                 target = new CoachReason { Kind = CoachReasonKind.TargetScouting, A = p.ForehandPower + p.ForehandControl, B = p.BackhandPower + p.BackhandControl };
             }
 
-            // Counter the opponent's visible style (tennissim-mvp-4 balance grid): attack a passive opponent, stay
-            // balanced against an aggressive one. A high-control player keeps a steady Safe game otherwise.
+            // Counter the opponent's visible style (balance grid): attack a passive opponent, stay balanced against an
+            // aggressive one. A style the opponent took only at the last changeover is not countered yet: the human
+            // decides after this coach, so countering it at once would let them switch again and punish the counter.
             var mine = players[self];
-            bool steady = (mine.ForehandControl + mine.BackhandControl) / 2 >= .85;
-            switch (current[other].Aggression)
+            var own = AggressionByPoint(record, self, toPoint);
+            var theirs = AggressionByPoint(record, other, toPoint);
+            var shown = current[other].Aggression;
+            if (fromPoint > 1 && theirs[fromPoint - 1] != shown)
+            { next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.HoldStyle }; }
+            else switch (shown)
             {
                 case Aggression.Safe: next.Aggression = Aggression.Aggressive; aggression = new CoachReason { Kind = CoachReasonKind.CounterSafe }; break;
                 case Aggression.Aggressive: next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.CounterAggressive }; break;
-                default:
-                    next.Aggression = steady ? Aggression.Safe : Aggression.Balanced;
-                    aggression = new CoachReason { Kind = steady ? CoachReasonKind.SteadyPlayer : CoachReasonKind.NeutralStyle, A = (mine.ForehandControl + mine.BackhandControl) / 2 };
-                    break;
+                default: next.Aggression = Aggression.Balanced; aggression = new CoachReason { Kind = CoachReasonKind.NeutralStyle }; break;
+            }
+
+            // The rule does not know which style suits its own player (a slow touch player must attack, a heavy but
+            // erratic hitter must stay safe), so it measures: own point share per own style, over the points where the
+            // opponent played its current style.
+            var won = new int[3]; var played = new int[3]; string selfId = record.Stats.Players[self].PlayerId;
+            foreach (var e in record.Events)
+                if (e.Kind == "PointEnded" && e.Point <= toPoint && theirs[e.Point] == shown)
+                { int a = (int)own[e.Point]; played[a]++; if (e.PlayerId == selfId) won[a]++; }
+            double Share(int a) => played[a] == 0 ? 0 : (double)won[a] / played[a];
+            int rule = (int)next.Aggression, now = (int)current[self].Aggression;
+            if (played[rule] >= TrialPoints)
+            {
+                int best = rule;
+                for (int a = 0; a < 3; a++) if (played[a] >= TrialPoints && Share(a) > Share(best)) best = a;
+                if (best != rule && Share(best) > Share(rule) + TrialMargin)
+                {
+                    next.Aggression = (Aggression)best;
+                    aggression = new CoachReason { Kind = CoachReasonKind.MeasuredStyle, From = (Aggression)rule, To = (Aggression)best, A = Share(best), B = Share(rule) };
+                }
+                else if (Share(rule) < TrialLosing)
+                {
+                    // Finish a running trial before starting the next one.
+                    if (now != rule && played[now] < TrialPoints) next.Aggression = (Aggression)now;
+                    else foreach (var a in new[] { Aggression.Balanced, Aggression.Aggressive, Aggression.Safe })
+                            if ((int)a != rule && played[(int)a] < TrialPoints)
+                            {
+                                next.Aggression = a;
+                                aggression = new CoachReason { Kind = CoachReasonKind.TryStyle, From = (Aggression)rule, To = a, A = Share(rule), B = played[rule] };
+                                break;
+                            }
+                }
             }
             var me = segment[self];
 
@@ -214,6 +266,22 @@ namespace TennisSim.Core
             if (next.Aggression != current[self].Aggression) decision.Reasons.Add(aggression!);
             if (next.Serve != current[self].Serve) decision.Reasons.Add(serve!);
             return decision.Reasons.Count > 0 ? decision : null;
+        }
+
+        // The aggression a player used in each point 1..toPoint (index 0 unused), from the input and the applied
+        // instructions in the record.
+        static Aggression[] AggressionByPoint(MatchRecord record, int player, int toPoint)
+        {
+            var result = new Aggression[toPoint + 1];
+            var value = record.Input.Tactics[player].Aggression; int point = 1;
+            foreach (var i in record.InstructionHistory)
+            {
+                if (i.Player != player || i.AppliedPoint <= 0) continue;
+                for (; point < i.AppliedPoint && point <= toPoint; point++) result[point] = value;
+                value = i.Value.Aggression;
+            }
+            for (; point <= toPoint; point++) result[point] = value;
+            return result;
         }
     }
 }

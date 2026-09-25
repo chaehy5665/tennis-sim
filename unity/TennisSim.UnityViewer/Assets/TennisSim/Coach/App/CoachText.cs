@@ -85,6 +85,13 @@ namespace TennisSim.Coach
                 case CoachReasonKind.NeutralStyle: return "균형으로 돌아갑니다.";
                 case CoachReasonKind.BigServerWide: return "서브가 강해 와이드 서브에 집중합니다 (서브 파워 " + Fixed(r.A, 2) + ").";
                 case CoachReasonKind.ServeRead: return "고정 코스 서브가 읽혀 섞습니다 (서브 포인트 " + Ratio((int)r.A, (int)r.B) + ").";
+                case CoachReasonKind.HoldStyle: return opponent + " 선수가 방금 공격성을 바꿔, 한 구간 균형으로 지켜봅니다.";
+                case CoachReasonKind.TryStyle:
+                    return Aggression(r.From) + "으로 " + Percent(r.A) + "(" + ((int)r.B).ToString(CultureInfo.InvariantCulture) + "포인트)에 그쳐 "
+                        + Aggression(r.To) + "을 한 구간 시험합니다.";
+                case CoachReasonKind.MeasuredStyle:
+                    return "시험해 보니 " + Aggression(r.To) + "이 " + Percent(r.A) + "로 " + Aggression(r.From) + " " + Percent(r.B) + "보다 나아 "
+                        + Aggression(r.To) + "으로 갑니다.";
                 default: return r.Kind.ToString();
             }
         }

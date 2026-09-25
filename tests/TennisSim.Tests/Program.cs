@@ -478,6 +478,51 @@ Test("Opponent coach: reads scouting and style, consumes no randomness, re-simul
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Coached(5, baseline, new Tactic { Aggression = Aggression.Safe })), "deterministic");
     Check(ReplayJson.Serialize(r) == ReplayJson.Serialize(Run(5, 137, r.Input)), "AI-coached replay re-simulates from its recorded instructions");
 });
+Test("Opponent coach: target needs evidence and hysteresis, a just-changed style is held, style trials keep their thresholds", () =>
+{
+    int measured = 0, holds = 0, trials = 0;
+    foreach (var (pa, pb) in new[] { ("touch", "touch"), ("baseline", "retriever"), ("slugger", "slugger"), ("baseline", "backhander") })
+        for (uint seed = 1; seed <= 6; seed++)
+        {
+            // A alternates Safe and Aggressive after seeing B's decision, as a coach probing the AI would.
+            var input = new MatchInput { Seed = seed, Players = new[] { PlayerProfile.Preset(pa, "A"), PlayerProfile.Preset(pb, "B") }, Tactics = new[] { new Tactic { Aggression = Aggression.Safe }, new Tactic() } };
+            var engine = new MatchEngine(input); int from = 1;
+            while (engine.AdvanceToChangeover())
+            {
+                var state = engine.State; int to = state.Score.PointsPlayed;
+                var d = OpponentCoach.DecideWithReasons(1, engine.Record, from, to, state.Tactics, input.Players);
+                bool aChanged = from > 1 && engine.Record.InstructionHistory.Any(i => i.Player == 0 && i.AppliedPoint == from);
+                foreach (var r in d?.Reasons ?? new List<CoachReason>())
+                {
+                    Check(r.Kind != CoachReasonKind.SteadyPlayer, "SteadyPlayer is no longer chosen");
+                    if (aChanged) Check(r.Kind != CoachReasonKind.CounterSafe && r.Kind != CoachReasonKind.CounterAggressive, "a style taken at the last changeover is not countered");
+                    if (r.Kind == CoachReasonKind.HoldStyle) { holds++; Check(aChanged, "hold only after the opponent changed"); }
+                    if (r.Kind == CoachReasonKind.TryStyle) { trials++; Check(r.B >= 10 && r.A < .42 && r.From != r.To, "trial thresholds"); }
+                    if (r.Kind == CoachReasonKind.MeasuredStyle) { trials++; Check(r.A > r.B + .1 && r.From != r.To, "measured style margin"); }
+                    if (r.Kind == CoachReasonKind.TargetMeasuredErrors)
+                    {
+                        measured++;
+                        var o = SegmentStats.Compute(engine.Record, 1, to).Players[0];
+                        int errors = o.ForehandErrors + o.BackhandErrors;
+                        double pooled = (double)errors / (o.Forehands + o.Backhands);
+                        double z = (r.A - r.B) / Math.Sqrt(pooled * (1 - pooled) * (1.0 / o.Forehands + 1.0 / o.Backhands));
+                        Check(errors >= 6 && o.Forehands >= 12 && o.Backhands >= 12, $"measured target with {errors} errors");
+                        Check(d!.Tactic.Target == TargetStyle.TargetBackhand ? z > 1 : z < -1, $"target flip inside the hysteresis band: z={z:F2}");
+                    }
+                }
+                if (d != null) engine.QueueTactics(1, d.Tactic);
+                engine.QueueTactics(0, new Tactic { Aggression = state.Tactics[0].Aggression == Aggression.Safe ? Aggression.Aggressive : Aggression.Safe });
+                from = to + 1;
+            }
+            Check(ReplayJson.Serialize(engine.Record) == ReplayJson.Serialize(Run(seed, 137, engine.Record.Input)), "re-simulates");
+        }
+    Check(measured > 0 && holds > 0 && trials > 0, $"rules exercised: measured {measured}, holds {holds}, trials {trials}");
+    // High control alone no longer sends a player to Safe: touch against a Balanced opponent stays Balanced at first.
+    var touch = new MatchInput { Seed = 3, Players = new[] { PlayerProfile.Preset("baseline", "A"), PlayerProfile.Preset("touch", "B") } };
+    var te = new MatchEngine(touch); te.AdvanceToChangeover();
+    var first = OpponentCoach.Decide(1, te.Record, 1, te.State.Score.PointsPlayed, te.State.Tactics, touch.Players) ?? te.State.Tactics[1];
+    Check(first.Aggression == Aggression.Balanced, "touch is not sent to Safe by its control");
+});
 Test("Segment energy is the recorded energy after the last point of the range", () =>
 {
     var r = Run(42); var last = r.Events.Last(e => e.Kind == "PointEnded" && e.Point == 10);

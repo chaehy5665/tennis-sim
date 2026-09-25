@@ -147,6 +147,16 @@ Test("Rook is the baseline preset with forehand and backhand swapped", () =>
     var i = CoachMatchup.Input(9); var b = PlayerProfile.Preset("baseline", "B");
     Check(i.Seed == 9 && i.Players[1].Name == "Rook" && i.Players[1].BackhandPower == b.ForehandPower && i.Players[1].ForehandControl == b.BackhandControl);
 });
+Test("Opponent-coach style reasons read as sentences with their numbers", () =>
+{
+    Check(CoachText.Reason(new CoachReason { Kind = CoachReasonKind.HoldStyle }, "Ember") == "Ember 선수가 방금 공격성을 바꿔, 한 구간 균형으로 지켜봅니다.");
+    var tried = new CoachReason { Kind = CoachReasonKind.TryStyle, From = Aggression.Balanced, To = Aggression.Aggressive, A = .38, B = 13 };
+    Check(CoachText.Reason(tried, "Ember") == "균형으로 38%(13포인트)에 그쳐 공격을 한 구간 시험합니다.", CoachText.Reason(tried, "Ember"));
+    var kept = new CoachReason { Kind = CoachReasonKind.MeasuredStyle, From = Aggression.Balanced, To = Aggression.Safe, A = .55, B = .38 };
+    Check(CoachText.Reason(kept, "Ember") == "시험해 보니 안전이 55%로 균형 38%보다 나아 안전으로 갑니다.", CoachText.Reason(kept, "Ember"));
+    foreach (CoachReasonKind kind in Enum.GetValues(typeof(CoachReasonKind)))
+        Check(CoachText.Reason(new CoachReason { Kind = kind }, "Ember") != kind.ToString(), "every reason has a sentence: " + kind);
+});
 Test("Korean words stay whole: word joiners only around Hangul, never at spaces", () =>
 {
     const char J = '\u2060';

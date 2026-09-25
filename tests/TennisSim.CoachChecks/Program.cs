@@ -464,6 +464,28 @@ Test("Serve course: opponent return position line in the design system's wording
     }
     Console.WriteLine("  sample: " + views[^1].Serve.Note);
 });
+Test("Serve course rows carry the match so far per course beside this segment", () =>
+{
+    var views = new List<ChangeoverView>(); var s = Play(3, 0, views);
+    for (int i = 0; i < views.Count; i++)
+    {
+        var seg = s.Segments[i]; var match = SegmentStats.Compute(s.Engine.Record, 1, seg.ToPoint).Players[0];
+        var p = views[i].Serve;
+        Check(p.MatchColumns.SequenceEqual(new[] { "첫 서브 성공", "서브 포인트 획득" }));
+        var courses = new[] { match.WideServe, match.BodyServe, match.TServe };
+        for (int k = 0; k < 3; k++)
+        {
+            var c = courses[k]; var row = p.Rows[k];
+            string Ratio(int a, int n) => n == 0 ? "—" : a + "/" + n;
+            Check(row.MatchValues.SequenceEqual(new[] { Ratio(c.FirstServesIn, c.Points), Ratio(c.Won, c.Points) }), row.Label + " match values");
+            Check(row.MatchMuted == (c.Points > 0 && c.Points < CoachViews.MinPoints), row.Label + " match muted");
+        }
+        // The match column covers this segment: its serve points are at least the segment's.
+        int segPoints = s.Engine.Record == null ? 0 : SegmentStats.Compute(s.Engine.Record, seg.FromPoint, seg.ToPoint).Players[0].ServePoints;
+        Check(match.WideServe.Points + match.BodyServe.Points + match.TServe.Points >= segPoints);
+    }
+    Check(CoachViews.ServePanel(SegmentStats.Compute(s.Engine.Record, 1, 10)).MatchColumns.Length == 0, "no match columns without match stats");
+});
 Console.WriteLine($"COACH_CHECKS passed={passed} failed={failed}");
 return failed == 0 ? 0 : 1;
 

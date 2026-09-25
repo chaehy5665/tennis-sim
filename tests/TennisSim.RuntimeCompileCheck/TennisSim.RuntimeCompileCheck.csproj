@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compiles the Unity coach Runtime (and the App layer it uses) against minimal UnityEngine stubs, so a call to a
+       member our own code does not declare fails on Linux instead of in the Mac Editor. The stubs model the Unity 6
+       signatures the Runtime uses; they are not Unity, so the Mac compile stays the authority on Unity's own API. -->
+  <PropertyGroup><OutputType>Library</OutputType><TargetFramework>net10.0</TargetFramework><LangVersion>9.0</LangVersion><Nullable>disable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors><ImplicitUsings>disable</ImplicitUsings><NoWarn>CS0067</NoWarn></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../unity/TennisSim.UnityViewer/Assets/TennisSim/Coach/App/*.cs" Link="App/%(Filename)%(Extension)" />
+    <Compile Include="../../unity/TennisSim.UnityViewer/Assets/TennisSim/Coach/Runtime/*.cs" Link="Runtime/%(Filename)%(Extension)" />
+    <ProjectReference Include="../../src/TennisSim.Core/TennisSim.Core.csproj" />
+  </ItemGroup>
+</Project>

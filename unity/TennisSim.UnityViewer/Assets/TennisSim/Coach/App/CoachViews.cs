@@ -16,7 +16,8 @@ namespace TennisSim.Coach
     public sealed class LandingFilter { public string Key; public string Label; }
     // Changeover evidence (design system changeover.md). A row's Values follow the panel's Columns; Muted marks a row
     // whose sample is below its threshold. A SplitRow is one line of the SplitBar: the opponent's backhand share.
-    public sealed class EvidenceRow { public string Label; public string[] Values; public bool Muted; }
+    // MatchValues (optional) follow MatchColumns: the same measure over the match so far, beside this segment's Values.
+    public sealed class EvidenceRow { public string Label; public string[] Values; public bool Muted; public string[] MatchValues; public bool MatchMuted; }
     public sealed class SplitRow { public string Label; public float Backhand; public string LeftText; public string RightText; public bool Muted; }
     public sealed class EvidencePanel
     {
@@ -26,6 +27,7 @@ namespace TennisSim.Coach
         // Note in line-muted: always for a context line (average rally), for a decision line only below its sample.
         public bool NoteMuted;
         public string[] Columns = new string[0];
+        public string[] MatchColumns = new string[0];
         public List<SplitRow> Split = new List<SplitRow>();
         public List<EvidenceRow> Rows = new List<EvidenceRow>();
     }
@@ -238,7 +240,7 @@ namespace TennisSim.Coach
             var prev = prevIndex >= 0 ? SegmentStats.Compute(session.Engine.Record, session.Segments[prevIndex].FromPoint, session.Segments[prevIndex].ToPoint) : null;
             view.HasPrevious = prev != null;
             view.Direction = DirectionPanel(s, prev);
-            view.Serve = ServePanel(s, prev);
+            view.Serve = ServePanel(s, prev, m);
             view.Compare = ComparePanel(s, prev);
             return view;
         }
@@ -284,18 +286,24 @@ namespace TennisSim.Coach
         }
 
         // Serve course: my serve points by the first serve's course. Ratios as k/n, never %; an unused course stays as "—".
-        public static EvidencePanel ServePanel(SegmentStats now, SegmentStats prev = null)
+        // With the match so far, each course also shows its match first serves in and serve points won (k/n): one
+        // segment is only a few serves per course, so the match total is what says whether a course pays.
+        public static EvidencePanel ServePanel(SegmentStats now, SegmentStats prev = null, SegmentStats match = null)
         {
             var me = now.Players[0];
             var panel = new EvidencePanel { Title = "서브 코스", Sample = "내 서브 " + me.ServePoints + "포인트", SampleTag = me.ServePoints < MinPoints, Columns = new[] { "서브", "첫 서브 성공", "서브 포인트 획득" } };
-            EvidenceRow Course(string label, ServeCourseStats c) => new EvidenceRow
+            if (match != null) panel.MatchColumns = new[] { "첫 서브 성공", "서브 포인트 획득" };
+            EvidenceRow Course(string label, ServeCourseStats c, ServeCourseStats total) => new EvidenceRow
             {
                 Label = label, Muted = c.Points > 0 && c.Points < MinPoints,
-                Values = new[] { c.Points == 0 ? CoachText.None : c.Points.ToString(), Count(c.FirstServesIn, c.Points), Count(c.Won, c.Points) }
+                Values = new[] { c.Points == 0 ? CoachText.None : c.Points.ToString(), Count(c.FirstServesIn, c.Points), Count(c.Won, c.Points) },
+                MatchValues = total == null ? null : new[] { Count(total.FirstServesIn, total.Points), Count(total.Won, total.Points) },
+                MatchMuted = total != null && total.Points > 0 && total.Points < MinPoints
             };
-            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Wide), me.WideServe));
-            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Body), me.BodyServe));
-            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.T), me.TServe));
+            var all = match?.Players[0];
+            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Wide), me.WideServe, all?.WideServe));
+            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.Body), me.BodyServe, all?.BodyServe));
+            panel.Rows.Add(Course(CoachText.Serve(ServeDirection.T), me.TServe, all?.TServe));
             // Whether the opponent is reading my serve: where the receiver stood against it (design system changeover.md
             // "2. 서브 코스 패널"). A decision line, so line colour, muted below 6 of my serve points.
             panel.Note = ReturnPosition(now, prev);
